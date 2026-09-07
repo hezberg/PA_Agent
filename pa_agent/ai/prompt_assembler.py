@@ -1144,24 +1144,7 @@ class PromptAssembler:
         prev_reasoning = ""
         if isinstance(prev_s1_response, dict):
             prev_reasoning = str(prev_s1_response.get("reasoning_content") or "")
-        preserve_mimo = False
-        if provider_settings is not None:
-            from pa_agent.ai.mimo_compat import (
-                build_assistant_api_message,
-                is_mimo_provider,
-            )
-
-            preserve_mimo = is_mimo_provider(
-                getattr(provider_settings, "base_url", ""),
-                getattr(provider_settings, "model", ""),
-            )
-        if preserve_mimo:
-            assistant_turn = build_assistant_api_message(
-                prev_assistant_content,
-                reasoning_content=prev_reasoning,
-            )
-        else:
-            assistant_turn = {"role": "assistant", "content": prev_assistant_content}
+        assistant_turn = {"role": "assistant", "content": prev_assistant_content}
 
         system_content = self._build_stage1_system_prompt()
         incremental_user_content = self._build_incremental_stage1_continuation_user_prompt(

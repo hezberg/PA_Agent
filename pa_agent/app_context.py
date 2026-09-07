@@ -50,17 +50,6 @@ class AppContext:
 
         # ── Settings ──────────────────────────────────────────────────────────
         settings = load_settings(SETTINGS_JSON_PATH)
-        from pa_agent.ai.qclaw_connector import sync_qclaw_agent_provider_on_load
-        from pa_agent.ai.workbuddy_connector import sync_workbuddy_provider_on_load
-        from pa_agent.ai.cursor_connector import sync_cursor_provider_on_load
-        from pa_agent.ai.trae_connector import sync_trae_cn_provider_on_load
-        from pa_agent.ai.qoder_connector import sync_qoder_cn_provider_on_load
-
-        sync_qclaw_agent_provider_on_load(settings, save_path=SETTINGS_JSON_PATH)
-        sync_workbuddy_provider_on_load(settings, save_path=SETTINGS_JSON_PATH)
-        sync_cursor_provider_on_load(settings, save_path=SETTINGS_JSON_PATH)
-        sync_trae_cn_provider_on_load(settings, save_path=SETTINGS_JSON_PATH)
-        sync_qoder_cn_provider_on_load(settings, save_path=SETTINGS_JSON_PATH)
 
         # ── Logging (with API key masking) ────────────────────────────────────
         configure_logging(api_key=settings.provider.api_key)
@@ -75,32 +64,48 @@ class AppContext:
 
         apply_kline_adjust_from_settings(settings)
         ds_kind = normalize_data_source_kind(
-            getattr(settings.general, "last_data_source", "mt5")
+            getattr(settings.general, "last_data_source", "easytdx")
         )
         data_source = create_data_source(ds_kind)
 
-        # Subscribe to the last-used symbol/timeframe from settings
-        try:
-            data_source.connect()
-            if ds_kind == "tradingview":
-                from pa_agent.data.tradingview import TradingViewSource
+        # Subscribe to the last-used symbol/timeframe from settings.
+        # Bounded: a dead/slow TDX server must not block WebUI startup (port
+        # bind waits on this).  The work continues in a daemon thread and
+        # self-heals — a later fetch/subscribe reuses the finished connection.
+        import threading as _threading
 
-                if isinstance(data_source, TradingViewSource):
-                    # Use saved exchange setting, default to auto (empty).
-                    saved_exchange = getattr(settings.general, 'last_tradingview_exchange', '') or ''
-                    data_source.set_exchange(saved_exchange)
-            data_source.subscribe(
-                settings.general.last_symbol,
-                settings.general.last_timeframe,
+        def _initial_subscribe() -> None:
+            try:
+                data_source.connect()
+                if ds_kind == "tradingview":
+                    from pa_agent.data.tradingview import TradingViewSource
+
+                    if isinstance(data_source, TradingViewSource):
+                        # Use saved exchange setting, default to auto (empty).
+                        saved_exchange = getattr(settings.general, 'last_tradingview_exchange', '') or ''
+                        data_source.set_exchange(saved_exchange)
+                data_source.subscribe(
+                    settings.general.last_symbol,
+                    settings.general.last_timeframe,
+                )
+                app_logger.info(
+                    "Data source %s subscribed to %s %s",
+                    ds_kind,
+                    settings.general.last_symbol,
+                    settings.general.last_timeframe,
+                )
+            except Exception as exc:  # noqa: BLE001
+                app_logger.warning("Initial data source subscription failed: %s", exc)
+
+        worker = _threading.Thread(
+            target=_initial_subscribe, name="initial-subscribe", daemon=True
+        )
+        worker.start()
+        worker.join(timeout=10)
+        if worker.is_alive():
+            app_logger.warning(
+                "Initial subscription still connecting in background; starting WebUI anyway"
             )
-            app_logger.info(
-                "Data source %s subscribed to %s %s",
-                ds_kind,
-                settings.general.last_symbol,
-                settings.general.last_timeframe,
-            )
-        except Exception as exc:  # noqa: BLE001
-            app_logger.warning("Initial data source subscription failed: %s", exc)
 
         # ── AI client ─────────────────────────────────────────────────────────
         from pa_agent.ai.client_factory import create_ai_client

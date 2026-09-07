@@ -19,7 +19,7 @@ def test_defaults(tmp_path):
     assert s.provider.context_window == 2_000_000
     assert s.general.analysis_bar_count == 100
     # 默认数据源为 MT5, 默认品种为现货黄金 XAUUSDm
-    assert s.general.last_data_source == "mt5"
+    assert s.general.last_data_source == "easytdx"
     assert s.general.last_symbol == "XAUUSDm"
     assert s.general.last_timeframe == "15m"
     assert s.general.decision_stance == "balanced"

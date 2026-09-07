@@ -1,4 +1,4 @@
-# PA Agent — AI K线分析辅助工具（桌面端）
+# PA Agent — AI K线分析辅助工具（WebUI）
 
 **交流 QQ 群：1063897401**
 
@@ -10,10 +10,10 @@
 
 ## 主要功能
 
-- 📈 **多数据源**：MT5（Windows）、TradingView（全平台）、yfinance（期货/加密货币）、AkShare（A 股）
+- 📈 **多数据源**：MT5（Windows）、TradingView（全平台）、通达信 easy_tdx（A 股/指数，全平台）、yfinance（期货/加密货币）、AkShare（A 股）
 - 🧠 **两阶段 AI 分析**：市场诊断 → 策略路由 → 交易决策（限价/突破/市价或不下单）
 - 🔄 **增量分析与持续跟踪**：新增 K 线时复用上次结论；开启 `keep_analysis` 后新 K 线收盘自动触发新一轮分析
-- 🌳 **决策树可视化**：赛博科幻风格可交互流程图，自动播放闸门→策略路径动画
+- 🌳 **决策树可视化**：可交互流程图，自动播放闸门→策略路径动画
 - 🔮 **未来走势预期**：AI 预测下一根 K 线方向和下一个市场周期位置
 - 💬 **分析后自由追问**：完整对话会话管理器，实时推理流 + Token 进度条，对话历史持久化
 - 📚 **经验库**：按周期位置检索历史案例供分析参考
@@ -43,11 +43,13 @@ pip install -e .
 python -m pa_agent.main
 ```
 
-首次启动后在**设置**中填写 **Base URL**、**模型名** 与 **API Key**。
+启动后自动在默认浏览器打开操作界面（默认 `http://127.0.0.1:8765`）。首次启动后在**「AI 模型设置」**中填写 **Base URL**、**模型名** 与 **API Key**。
 
 > 如需隔离环境也可创建虚拟环境：`python -m venv .venv` 后激活再 `pip install -e .`。
 
-**安装内容**：PyQt6（GUI 框架）+ pyqtgraph（K 线图表绘图）+ numpy/pandas（数据处理）+ openai（AI API 客户端）+ **akshare/baostock（A 股数据源）** + json 校验、模型定义等全套依赖。
+**安装内容**：FastAPI + uvicorn（本地 Web 服务）+ numpy/pandas（数据处理）+ openai（AI API 客户端）+ **akshare/baostock（A 股数据源）** + json 校验、模型定义等全套依赖。
+
+界面为 React 单页应用：发布版需先构建前端（`make build-web`，产出 `web/dist`，随服务自动托管）；开发界面时用 `make dev-web` 启动 Vite 热更新服务（`/api` 自动代理到本地后端）。
 
 > 若需运行测试（pytest）或代码格式化（ruff/black），额外安装：`pip install -e ".[dev]"`。
 
@@ -65,7 +67,7 @@ make uv-run
 
 # 3. 之后每次启动
 make uv-run
-# 或手动：uv run python -m pa_agent.main
+# 或手动：uv run python -m pa_agent.main（浏览器访问 http://127.0.0.1:8765）
 ```
 
 > 运行测试：`make uv-test`，代码检查：`make uv-lint`。

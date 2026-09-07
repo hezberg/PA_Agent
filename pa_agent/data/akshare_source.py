@@ -471,12 +471,13 @@ class AkShareSource(DataSource):
         cols = [x.strip() for x in fields.split(",")]
         df = pd.DataFrame(data, columns=cols)
         if freq != "d":
+            # baostock 的 time 字段自带日期前缀（如 20260904150000000），
+            # 直接截取 yyyymmddHHMMSS 解析；此前拼接 date 列的写法永远解析失败。
+            # 且 baostock 分钟线 time 为 bar 结束时刻，需归一为开始时刻（同 EM 口径）。
             tcol = df["time"].astype(str).str.replace(r"\D", "", regex=True).str.slice(0, 14)
-            bar_time = pd.to_datetime(
-                df["date"].astype(str) + tcol,
-                format="%Y-%m-%d%H%M%S",
-                errors="coerce",
-            )
+            bar_time = pd.to_datetime(tcol, format="%Y%m%d%H%M%S", errors="coerce")
+            if freq == "60":
+                bar_time = bar_time - pd.Timedelta(minutes=60)
             slim = pd.DataFrame(
                 {
                     "bar_time": bar_time,

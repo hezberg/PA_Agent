@@ -1,12 +1,12 @@
-"""直接运行此文件启动 PA Agent。
+"""直接运行此文件启动 PA Agent WebUI。
 
 用法：
     python run.py
 
-或者双击 run.py（如果系统关联了 Python）。
+启动后自动在默认浏览器打开操作界面（默认 http://127.0.0.1:8765）。
 
-注意：不要在 Spyder / Jupyter 里用 %runfile 启动本程序——会杀死当前内核。
-请用系统终端 ``python run.py``，或在 Spyder 中运行本文件（会自动转到独立进程）。
+注意：不要在 Spyder / Jupyter 里直接运行本文件——服务器会阻塞当前控制台。
+在 Spyder 中运行时会自动转到独立进程。
 """
 from __future__ import annotations
 
@@ -41,7 +41,7 @@ def _inside_ipython_kernel() -> bool:
 
 
 def _launch_detached_subprocess() -> None:
-    """Start PA Agent in a separate process so the IDE kernel stays alive."""
+    """Start PA Agent in a separate process so the IDE console stays usable."""
     script = os.path.join(_here, "run.py")
     cmd = [sys.executable, script, "--subprocess"]
     kwargs: dict = {"cwd": _here, "close_fds": True}
@@ -56,11 +56,11 @@ def _print_embedded_console_help() -> None:
     msg = (
         "\n"
         "══════════════════════════════════════════════════════════════\n"
-        "  PA Agent 是 PyQt6 桌面程序，不能在 Spyder/Jupyter 内核里直接 %runfile。\n"
-        "  继续在内核里运行会导致「The kernel died」且通常没有 Python  traceback。\n"
+        "  PA Agent 是本地 Web 服务，直接在 Spyder/Jupyter 内核里运行会阻塞控制台。\n"
         "\n"
-        "  已尝试在独立进程中启动 GUI。若窗口未出现，请在终端执行：\n"
+        "  已尝试在独立进程中启动服务。若浏览器未自动打开，请在终端执行：\n"
         f"      python \"{os.path.join(_here, 'run.py')}\"\n"
+        "  然后访问 http://127.0.0.1:8765\n"
         "\n"
         "  崩溃排查可查看：logs/pa_agent.log 、 logs/crash.log\n"
         "══════════════════════════════════════════════════════════════\n"

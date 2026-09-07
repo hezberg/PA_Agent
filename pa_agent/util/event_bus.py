@@ -1,16 +1,15 @@
-"""Event bus for inter-component communication via Qt signals."""
+"""Event bus for inter-component communication (Qt-free signal hub)."""
 from __future__ import annotations
-
-from PyQt6.QtCore import QObject, pyqtSignal
 
 from pa_agent.data.base import KlineFrame
 from pa_agent.records.schema import AlarmPayload
+from pa_agent.util.signals import Signal
 
 
-class EventBus(QObject):
-    """Central signal hub shared across GUI components and orchestrators.
+class EventBus:
+    """Central signal hub shared across frontends and orchestrators.
 
-    Signals
+    Signals (Qt-free; use ``.connect(fn)``)
     -------
     data_frame  : emitted by RefreshLoop with the latest KlineFrame
     status      : emitted with a human-readable status string for the status bar
@@ -18,10 +17,11 @@ class EventBus(QObject):
     token_update: emitted with a dict of token/cost update data for Tab2
     """
 
-    data_frame = pyqtSignal(object)    # KlineFrame
-    status = pyqtSignal(str)           # status text
-    exception = pyqtSignal(object)     # AlarmPayload
-    token_update = pyqtSignal(dict)    # token/cost update dict
+    def __init__(self) -> None:
+        self.data_frame = Signal(object)    # KlineFrame
+        self.status = Signal(str)           # status text
+        self.exception = Signal(object)     # AlarmPayload
+        self.token_update = Signal(dict)    # token/cost update dict
 
     def emit_status(self, text: str) -> None:
         """Convenience wrapper — emit a status string."""

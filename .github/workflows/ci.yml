@@ -22,3 +22,24 @@ jobs:
 
       - name: Verify install
         run: python -c "import pa_agent; print('OK')"
+
+      - name: Run tests
+        run: pytest -q
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install web deps
+        working-directory: web
+        run: npm install
+
+      - name: Build frontend (typecheck + vite build)
+        working-directory: web
+        run: npm run build

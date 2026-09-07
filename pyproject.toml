@@ -11,10 +11,9 @@ requires-python = ">=3.11"
 license = { text = "AGPL-3.0-or-later" }
 authors = [{ name = "PA Agent Team" }]
 dependencies = [
-    "PyQt6>=6.6",
-    "pyqtgraph>=0.13",
     "numpy>=1.26",
-    "pandas>=2.2",
+    # easy-tdx 依赖 pandas<3，保持 2.x 线
+    "pandas>=2.2,<3",
     "openai>=1.40",
     "tiktoken>=0.7",
     "jsonschema>=4.22",
@@ -29,12 +28,15 @@ dependencies = [
     "tushare>=1.4",
     "cursor-sdk>=0.1.0",
     "httpx[socks]>=0.27",
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+    "requests>=2.31",
+    "easy-tdx>=1.32,<2",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8",
-    "pytest-qt>=4.4",
     "hypothesis>=6",
     "ruff>=0.5",
     "black>=24.4",

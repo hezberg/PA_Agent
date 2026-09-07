@@ -1,517 +1,226 @@
-"""Unit tests for DeepSeekClient (task 6.5)."""
+"""Unit tests for the slimmed OpenAI-compatible DeepSeekClient (2026-09 精简版).
+
+Standard protocol only: reasoning_effort top-level param, standard usage fields,
+streaming with per-chunk cancellation. The OpenAI SDK is mocked.
+"""
 from __future__ import annotations
 
-import sys
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import MagicMock, patch, call
-from pa_agent.config.settings import AIProviderSettings
+
 from pa_agent.ai.deepseek_client import (
-    DeepSeekClient,
     AIReply,
     AIUsage,
     CancelledError,
-    _completion_max_tokens,
-    _is_deepseek_model,
-    _openclaw_agent_request_extra,
+    DeepSeekClient,
+    _extract_cached_prompt_tokens,
+    supports_kv_prefix_chain,
 )
+from pa_agent.config.settings import AIProviderSettings
+from pa_agent.util.threading import CancelToken
 
 
-def _make_settings(api_key: str = "sk-test-1234abcd") -> AIProviderSettings:
+def _make_settings(**overrides) -> AIProviderSettings:
     s = AIProviderSettings()
-    s.api_key = api_key
+    s.api_key = "sk-test-1234abcd"
+    s.base_url = "https://relay.example.com/v1"
+    s.model = "gpt-test"
+    for k, v in overrides.items():
+        setattr(s, k, v)
     return s
 
 
-def _make_mock_response(content: str = "hello", reasoning: str = "thinking...") -> MagicMock:
-    msg = MagicMock()
-    msg.content = content
-    msg.reasoning_content = reasoning
-    choice = MagicMock()
-    choice.message = msg
+def _fake_usage(prompt=100, completion=50, total=150, cached=20):
     usage = MagicMock()
-    usage.prompt_tokens = 100
-    usage.completion_tokens = 50
-    usage.total_tokens = 150
+    usage.prompt_tokens = prompt
+    usage.completion_tokens = completion
+    usage.total_tokens = total
     usage.prompt_tokens_details = MagicMock()
-    usage.prompt_tokens_details.cached_tokens = 20
-    resp = MagicMock()
-    resp.choices = [choice]
-    resp.usage = usage
-    resp.id = "req-abc123"
-    resp.model = "deepseek-v4-pro"
-    return resp
+    usage.prompt_tokens_details.cached_tokens = cached
+    return usage
 
 
-def test_chat_does_not_send_forbidden_params():
-    """chat() must never pass temperature/top_p/presence_penalty/frequency_penalty."""
-    settings = _make_settings()
-    client = DeepSeekClient(settings)
-
-    mock_resp = _make_mock_response()
-    mock_openai = MagicMock()
-    mock_openai.return_value.chat.completions.create.return_value = mock_resp
-
-    with patch("pa_agent.ai.deepseek_client._OpenAI", mock_openai):
-        reply = client.chat([{"role": "user", "content": "hi"}])
-
-    call_kwargs = mock_openai.return_value.chat.completions.create.call_args
-    kwargs = call_kwargs.kwargs if call_kwargs.kwargs else {}
-    all_kwargs = {**(call_kwargs.args[0] if call_kwargs.args else {}), **kwargs}
-
-    for forbidden in ("temperature", "top_p", "presence_penalty", "frequency_penalty"):
-        assert forbidden not in all_kwargs, f"Forbidden param '{forbidden}' was sent to API"
+class FakeStreamChunk:
+    def __init__(self, *, delta=None, usage=None, chunk_id="req-1", model="m"):
+        self.choices = [MagicMock(delta=delta)] if delta is not None else []
+        self.usage = usage
+        self.id = chunk_id
+        self.model = model
 
 
-def test_chat_extra_body_thinking_enabled():
-    """DeepSeek v4+ uses thinking.type=adaptive + output_config.effort."""
-    settings = _make_settings()
-    settings.base_url = "https://api.deepseek.com"
-    settings.model = "deepseek-v4-pro"
-    settings.thinking = True
-    settings.reasoning_effort = "max"
-    client = DeepSeekClient(settings)
-
-    mock_resp = _make_mock_response()
-    mock_openai = MagicMock()
-    mock_openai.return_value.chat.completions.create.return_value = mock_resp
-
-    with patch("pa_agent.ai.deepseek_client._OpenAI", mock_openai):
-        client.chat([{"role": "user", "content": "hi"}])
-
-    call_kwargs = mock_openai.return_value.chat.completions.create.call_args
-    kwargs = call_kwargs.kwargs
-    assert kwargs["extra_body"]["thinking"]["type"] == "adaptive"
-    assert kwargs["extra_body"]["output_config"]["effort"] == "max"
-    assert kwargs["reasoning_effort"] == "max"
+class FakeDelta:
+    def __init__(self, reasoning=None, content=None):
+        self.reasoning_content = reasoning
+        self.content = content
 
 
-def test_completion_max_tokens_deepseek_cap():
-    settings = _make_settings()
-    settings.base_url = "https://api.deepseek.com"
-    settings.model = "deepseek-v4-pro"
-    assert _completion_max_tokens(settings, extra_body={}, effort="max") == 384_000
+def _make_client(settings=None) -> tuple[DeepSeekClient, MagicMock]:
+    """Return (client, mock OpenAI constructor) with a scripted stream."""
+    client = DeepSeekClient(settings or _make_settings())
 
-
-def test_sensenova_thinking_uses_enabled_disabled_not_adaptive():
-    """SenseNova (token.sensenova.cn) 网关只接受 thinking.type 的
-    enabled/disabled/auto，不接受 DeepSeek 原生的 adaptive。
-    即使用户模型名是 deepseek-v4-flash，参数格式也随 SenseNova 网关。"""
-    from pa_agent.ai.deepseek_client import _resolve_thinking_params
-
-    settings = _make_settings()
-    settings.base_url = "https://token.sensenova.cn/api/llm/v1"
-    settings.model = "deepseek-v4-flash"
-    settings.thinking = True
-    settings.reasoning_effort = "high"
-
-    # 开启思考 → enabled
-    extra, effort = _resolve_thinking_params(settings, thinking=True, reasoning_effort="high")
-    assert extra["thinking"]["type"] == "enabled"
-    assert "adaptive" not in str(extra)
-    assert "output_config" not in extra
-    assert effort == "high"
-
-    # 关闭思考 → disabled
-    extra2, effort2 = _resolve_thinking_params(settings, thinking=False, reasoning_effort="high")
-    assert extra2["thinking"]["type"] == "disabled"
-    assert effort2 is None
-
-
-def test_completion_max_tokens_unknown_gateway_global_cap():
-    settings = _make_settings()
-    settings.base_url = "https://api.example-proxy.com/v1"
-    settings.model = "some-model"
-    assert _completion_max_tokens(settings, extra_body={}, effort="max") == 384_000
-
-
-def test_completion_max_tokens_bai_caps_at_8192():
-    """B.AI (api.b.ai) 网关的 deepseek-v4-flash completion 上限为 8192，
-    不能套用默认的 384000，否则上游 400。"""
-    settings = _make_settings()
-    settings.base_url = "https://api.b.ai/v1"
-    settings.model = "deepseek-v4-flash"
-    assert _completion_max_tokens(settings, extra_body={}, effort="high") == 8_192
-
-
-def test_bai_thinking_uses_deepseek_adaptive_not_enabled():
-    """B.AI deepseek-v4-flash 用 DeepSeek 原生 thinking 格式
-    （thinking.type=adaptive + output_config.effort），即 thinkingFormat=deepseek，
-    不是 SenseNova 那种 enabled。"""
-    from pa_agent.ai.deepseek_client import _resolve_thinking_params
-
-    settings = _make_settings()
-    settings.base_url = "https://api.b.ai/v1"
-    settings.model = "deepseek-v4-flash"
-    settings.thinking = True
-    settings.reasoning_effort = "high"
-
-    extra, effort = _resolve_thinking_params(settings, thinking=True, reasoning_effort="high")
-    assert extra["thinking"]["type"] == "adaptive"
-    assert extra["output_config"]["effort"] == "high"
-    assert effort == "high"
-
-    extra2, effort2 = _resolve_thinking_params(settings, thinking=False, reasoning_effort="high")
-    assert extra2["thinking"]["type"] == "disabled"
-    assert "output_config" not in extra2
-    assert effort2 is None
-
-
-def test_bai_max_effort_clamped_to_high():
-    """B.AI 声明的 reasoningEfforts 只有 low/medium/high；把 max 夹到 high。"""
-    from pa_agent.ai.deepseek_client import _resolve_thinking_params
-
-    settings = _make_settings()
-    settings.base_url = "https://api.b.ai/v1"
-    settings.model = "deepseek-v4-flash"
-
-    extra, effort = _resolve_thinking_params(settings, thinking=True, reasoning_effort="max")
-    assert extra["output_config"]["effort"] == "high"
-    assert effort == "high"
-
-
-def test_bai_chat_sends_capped_max_tokens():
-    settings = _make_settings()
-    settings.base_url = "https://api.b.ai/v1"
-    settings.model = "deepseek-v4-flash"
-    settings.thinking = True
-    settings.reasoning_effort = "high"
-    client = DeepSeekClient(settings)
-
-    mock_resp = _make_mock_response()
-    mock_openai = MagicMock()
-    mock_openai.return_value.chat.completions.create.return_value = mock_resp
-
-    with patch("pa_agent.ai.deepseek_client._OpenAI", mock_openai):
-        client.chat([{"role": "user", "content": "hi"}])
-
-    kwargs = mock_openai.return_value.chat.completions.create.call_args.kwargs
-    assert kwargs["max_tokens"] == 8_192
-    assert kwargs["extra_body"]["thinking"]["type"] == "adaptive"
-    assert kwargs["extra_body"]["output_config"]["effort"] == "high"
-
-
-def test_completion_max_tokens_packy_claude_cap():
-    settings = _make_settings()
-    settings.base_url = "https://www.packyapi.com/v1"
-    settings.model = "claude-sonnet-4-6"
-    extra_body = {"thinking": {"type": "enabled", "budget_tokens": 127_999}}
-    assert _completion_max_tokens(settings, extra_body=extra_body, effort="max") == 128_000
-
-
-def test_packy_hoists_system_message_to_extra_body():
-    from pa_agent.ai.deepseek_client import _prepare_chat_messages
-
-    settings = _make_settings()
-    settings.base_url = "https://www.packyapi.com/v1"
-    settings.model = "claude-sonnet-4-6"
-    msgs = [
-        {"role": "system", "content": "SYS"},
-        {"role": "user", "content": "USR"},
+    chunks = [
+        FakeStreamChunk(delta=FakeDelta(reasoning="思考"), chunk_id="req-1", model="gpt-test"),
+        FakeStreamChunk(delta=FakeDelta(content="你好")),
+        FakeStreamChunk(usage=_fake_usage()),
     ]
-    api_msgs, system = _prepare_chat_messages(settings, msgs)
-    assert system == "SYS"
-    assert api_msgs == [{"role": "user", "content": "USR"}]
+    fake_openai = MagicMock()
+    fake_openai.return_value.chat.completions.create.return_value = iter(chunks)
+    return client, fake_openai
 
 
-def test_packy_claude_thinking_uses_budget_not_reasoning_effort():
-    settings = _make_settings()
-    settings.base_url = "https://www.packyapi.com/v1"
-    settings.model = "claude-sonnet-4-6"
-    settings.thinking = True
-    from pa_agent.ai.deepseek_client import _resolve_thinking_params
+# ── Contract: streaming + callbacks + usage ───────────────────────────────────
 
-    extra, effort = _resolve_thinking_params(settings, thinking=True, reasoning_effort="max")
-    assert effort is None
-    assert extra["thinking"]["type"] == "enabled"
-    assert extra["thinking"]["budget_tokens"] == 127_999
-
-
-def test_chat_sends_max_tokens_when_thinking():
-    settings = _make_settings()
-    settings.base_url = "https://api.deepseek.com"
-    settings.model = "deepseek-v4-pro"
-    settings.thinking = True
-    settings.reasoning_effort = "medium"
-    client = DeepSeekClient(settings)
-
-    mock_resp = _make_mock_response()
-    mock_openai = MagicMock()
-    mock_openai.return_value.chat.completions.create.return_value = mock_resp
-
-    with patch("pa_agent.ai.deepseek_client._OpenAI", mock_openai):
-        client.chat([{"role": "user", "content": "hi"}])
-
-    kwargs = mock_openai.return_value.chat.completions.create.call_args.kwargs
-    assert kwargs["max_tokens"] == 384_000
-
-
-def test_chat_kkai_sends_thinking_object_not_reasoning_effort():
-    """KKAI Claude: thinking budget in extra_body; reasoning_effort rejected upstream."""
-    settings = _make_settings()
-    settings.base_url = "https://api.kkone.vip/v1"
-    settings.thinking = True
-    settings.reasoning_effort = "high"
-    client = DeepSeekClient(settings)
-
-    mock_resp = _make_mock_response()
-    mock_openai = MagicMock()
-    mock_openai.return_value.chat.completions.create.return_value = mock_resp
-
-    with patch("pa_agent.ai.deepseek_client._OpenAI", mock_openai):
-        client.chat([{"role": "user", "content": "hi"}])
-
-    kwargs = mock_openai.return_value.chat.completions.create.call_args.kwargs
-    assert kwargs["extra_body"]["thinking"] == {"type": "enabled", "budget_tokens": 999_998}
-    assert "reasoning_effort" not in kwargs
-
-
-def test_chat_kkai_thinking_off_sends_no_thinking_params():
-    settings = _make_settings()
-    settings.base_url = "https://api.kkone.vip/v1"
-    settings.thinking = False
-    client = DeepSeekClient(settings)
-
-    mock_resp = _make_mock_response()
-    mock_openai = MagicMock()
-    mock_openai.return_value.chat.completions.create.return_value = mock_resp
-
-    with patch("pa_agent.ai.deepseek_client._OpenAI", mock_openai):
-        client.chat([{"role": "user", "content": "hi"}])
-
-    kwargs = mock_openai.return_value.chat.completions.create.call_args.kwargs
-    assert "reasoning_effort" not in kwargs
-    assert "extra_body" not in kwargs
-
-
-def test_chat_yunwu_opus_47_sends_adaptive_thinking():
-    settings = _make_settings()
-    settings.base_url = "https://yunwu.ai/v1"
-    settings.model = "claude-opus-4-7"
-    settings.thinking = True
-    settings.reasoning_effort = "high"
-    client = DeepSeekClient(settings)
-
-    mock_resp = _make_mock_response()
-    mock_openai = MagicMock()
-    mock_openai.return_value.chat.completions.create.return_value = mock_resp
-
-    with patch("pa_agent.ai.deepseek_client._OpenAI", mock_openai):
-        client.chat([{"role": "user", "content": "hi"}])
-
-    kwargs = mock_openai.return_value.chat.completions.create.call_args.kwargs
-    assert kwargs["extra_body"]["thinking"] == {"type": "adaptive"}
-    assert kwargs["extra_body"]["output_config"] == {"effort": "high"}
-    assert kwargs["reasoning_effort"] == "high"
-
-
-def test_chat_yunwu_thinking_off_sends_nothing():
-    settings = _make_settings()
-    settings.base_url = "https://yunwu.ai/v1"
-    settings.model = "claude-opus-4-7"
-    settings.thinking = False
-    client = DeepSeekClient(settings)
-
-    mock_resp = _make_mock_response()
-    mock_openai = MagicMock()
-    mock_openai.return_value.chat.completions.create.return_value = mock_resp
-
-    with patch("pa_agent.ai.deepseek_client._OpenAI", mock_openai):
-        client.chat([{"role": "user", "content": "hi"}])
-
-    kwargs = mock_openai.return_value.chat.completions.create.call_args.kwargs
-    assert "extra_body" not in kwargs
-    assert "reasoning_effort" not in kwargs
-
-
-def test_stream_kkai_passes_thinking_extra_body():
-    settings = _make_settings()
-    settings.base_url = "https://api.kkone.vip/v1"
-    settings.thinking = True
-    settings.reasoning_effort = "medium"
-    client = DeepSeekClient(settings)
-
-    chunk_reason = MagicMock()
-    chunk_reason.choices = [MagicMock()]
-    delta = MagicMock()
-    delta.reasoning_content = "think"
-    delta.content = None
-    chunk_reason.choices[0].delta = delta
-    chunk_reason.usage = None
-    chunk_reason.id = "id-1"
-    chunk_reason.model = "claude-opus-4-5"
-
-    chunk_done = MagicMock()
-    chunk_done.choices = []
-    chunk_done.usage = MagicMock(
-        prompt_tokens=10,
-        completion_tokens=5,
-        total_tokens=15,
-        prompt_tokens_details=MagicMock(cached_tokens=0),
-    )
-
-    mock_openai = MagicMock()
-    mock_openai.return_value.chat.completions.create.return_value = iter(
-        [chunk_reason, chunk_done]
-    )
-
-    with patch("pa_agent.ai.deepseek_client._OpenAI", mock_openai):
-        reply = client.stream_chat(
-            [{"role": "user", "content": "hi"}],
-            on_reasoning_token=lambda c: None,
-        )
-
-    kwargs = mock_openai.return_value.chat.completions.create.call_args.kwargs
-    assert kwargs["extra_body"]["thinking"]["budget_tokens"] == 999_998
-    assert "reasoning_effort" not in kwargs
-    assert reply.reasoning_content == "think"
-
-
-def test_chat_cancel_token_raises():
-    """If cancel_token is set, chat() raises CancelledError before calling API."""
-    from pa_agent.util.threading import CancelToken
-    settings = _make_settings()
-    client = DeepSeekClient(settings)
-
-    token = CancelToken()
-    token.set()
-
-    mock_openai = MagicMock()
-    with patch("pa_agent.ai.deepseek_client._OpenAI", mock_openai):
-        with pytest.raises(CancelledError):
-            client.chat([{"role": "user", "content": "hi"}], cancel_token=token)
-
-    # API must NOT have been called
-    mock_openai.return_value.chat.completions.create.assert_not_called()
-
-
-def test_chat_no_plaintext_key_in_logs(caplog):
-    """API key must not appear in log output."""
-    import logging
-    settings = _make_settings(api_key="sk-super-secret-9999")
-    client = DeepSeekClient(settings)
-
-    mock_resp = _make_mock_response()
-    mock_openai = MagicMock()
-    mock_openai.return_value.chat.completions.create.return_value = mock_resp
-
-    with caplog.at_level(logging.DEBUG, logger="pa_agent.ai.deepseek_client"):
-        with patch("pa_agent.ai.deepseek_client._OpenAI", mock_openai):
-            client.chat([{"role": "user", "content": "hi"}])
-
-    for record in caplog.records:
-        assert "sk-super-secret-9999" not in record.getMessage(), (
-            f"Plaintext API key found in log: {record.getMessage()}"
-        )
-
-
-def test_chat_returns_aireply_fields():
-    """chat() returns an AIReply with all expected fields populated."""
-    settings = _make_settings()
-    client = DeepSeekClient(settings)
-
-    mock_resp = _make_mock_response(content="answer", reasoning="thought")
-    mock_openai = MagicMock()
-    mock_openai.return_value.chat.completions.create.return_value = mock_resp
-
-    with patch("pa_agent.ai.deepseek_client._OpenAI", mock_openai):
-        reply = client.chat([{"role": "user", "content": "hi"}])
+def test_stream_chat_returns_ai_reply_with_standard_usage() -> None:
+    client, fake_openai = _make_client()
+    with patch("pa_agent.ai.deepseek_client._OpenAI", fake_openai):
+        reply = client.stream_chat([{"role": "user", "content": "hi"}])
 
     assert isinstance(reply, AIReply)
-    assert reply.content == "answer"
-    assert reply.reasoning_content == "thought"
+    assert reply.content == "你好"
+    assert reply.reasoning_content == "思考"
     assert reply.usage.prompt_tokens == 100
+    assert reply.usage.cached_prompt_tokens == 20
     assert reply.usage.completion_tokens == 50
-    assert reply.request_id == "req-abc123"
-    assert reply.latency_ms >= 0
+    assert reply.usage.total_tokens == 150
+    assert reply.usage.cache_hit_rate == pytest.approx(0.2)
+    assert reply.request_id == "req-1"
 
 
-def test_openclaw_is_not_treated_as_deepseek_model() -> None:
-    assert _is_deepseek_model("openclaw") is False
-    assert _is_deepseek_model("deepseek-v4-pro") is True
+def test_stream_chat_drives_both_callbacks() -> None:
+    client, fake_openai = _make_client()
+    reasoning: list[str] = []
+    content: list[str] = []
+    with patch("pa_agent.ai.deepseek_client._OpenAI", fake_openai):
+        client.stream_chat(
+            [{"role": "user", "content": "hi"}],
+            on_reasoning_token=reasoning.append,
+            on_content_token=content.append,
+        )
+    assert reasoning == ["思考"]
+    assert content == ["你好"]
 
 
-def test_openclaw_agent_request_includes_tool_choice_none() -> None:
-    settings = _make_settings()
-    settings.model = "openclaw"
-    settings.base_url = "http://127.0.0.1:58579/v1"
-    with patch("pa_agent.ai.qclaw_connector.detect_qclaw", return_value=True):
-        assert _openclaw_agent_request_extra(settings) == {"tool_choice": "none"}
+# ── Thinking / reasoning_effort semantics ─────────────────────────────────────
+
+def test_thinking_on_sends_standard_reasoning_effort_param() -> None:
+    settings = _make_settings(thinking=True, reasoning_effort="high")
+    client, fake_openai = _make_client(settings)
+    with patch("pa_agent.ai.deepseek_client._OpenAI", fake_openai):
+        client.stream_chat([{"role": "user", "content": "hi"}])
+
+    kwargs = fake_openai.return_value.chat.completions.create.call_args.kwargs
+    assert kwargs["reasoning_effort"] == "high"
+    assert "temperature" not in kwargs
+    assert "extra_body" not in kwargs          # 无厂商 extra_body
+    assert kwargs["max_tokens"] == 384_000     # 全局唯一上限，无 per-vendor 分支
 
 
-def test_stream_chat_passes_tool_choice_none_for_openclaw() -> None:
-    settings = _make_settings()
-    settings.model = "openclaw"
-    settings.base_url = "http://127.0.0.1:58579/v1"
-    settings.thinking = False
-    client = DeepSeekClient(settings)
+def test_thinking_off_omits_reasoning_and_sets_temperature_zero() -> None:
+    settings = _make_settings(thinking=False)
+    client, fake_openai = _make_client(settings)
+    with patch("pa_agent.ai.deepseek_client._OpenAI", fake_openai):
+        client.stream_chat([{"role": "user", "content": "hi"}])
 
-    mock_openai = MagicMock()
-    mock_stream = iter([])
-
-    def _create(**kwargs):
-        mock_openai.last_kwargs = kwargs
-        return mock_stream
-
-    mock_openai.return_value.chat.completions.create.side_effect = _create
-
-    with patch("pa_agent.ai.qclaw_connector.detect_qclaw", return_value=True):
-        with patch("pa_agent.ai.deepseek_client._OpenAI", mock_openai):
-            try:
-                client.stream_chat([{"role": "user", "content": "hi"}])
-            except Exception:
-                pass
-
-    extra = mock_openai.last_kwargs.get("extra_body") or {}
-    assert extra.get("tool_choice") == "none"
+    kwargs = fake_openai.return_value.chat.completions.create.call_args.kwargs
+    assert "reasoning_effort" not in kwargs
+    assert kwargs["temperature"] == 0
 
 
-def test_mimo_chat_sends_enable_thinking_extra_body() -> None:
-    settings = _make_settings()
-    settings.base_url = "https://api.xiaomimimo.com/v1"
-    settings.model = "mimo-v2-flash"
-    settings.thinking = True
-    client = DeepSeekClient(settings)
-
-    mock_resp = _make_mock_response()
-    mock_openai = MagicMock()
-    mock_openai.return_value.chat.completions.create.return_value = mock_resp
-
-    with patch("pa_agent.ai.deepseek_client._OpenAI", mock_openai):
-        client.chat([{"role": "user", "content": "hi"}])
-
-    kwargs = mock_openai.return_value.chat.completions.create.call_args.kwargs
-    assert kwargs["extra_body"]["chat_template_kwargs"] == {"enable_thinking": True}
-    assert kwargs["max_tokens"] == 65_536
+def test_call_level_overrides_settings() -> None:
+    settings = _make_settings(thinking=True, reasoning_effort="high")
+    client, fake_openai = _make_client(settings)
+    with patch("pa_agent.ai.deepseek_client._OpenAI", fake_openai):
+        client.stream_chat(
+            [{"role": "user", "content": "hi"}],
+            thinking=False,
+        )
+    kwargs = fake_openai.return_value.chat.completions.create.call_args.kwargs
+    assert "reasoning_effort" not in kwargs
+    assert kwargs["temperature"] == 0
 
 
-def test_mimo_chat_patches_tool_call_messages_before_send() -> None:
-    settings = _make_settings()
-    settings.base_url = "https://api.xiaomimimo.com/v1"
-    settings.model = "mimo-v2.5-pro"
-    settings.thinking = False
-    client = DeepSeekClient(settings)
+# ── Cancellation ──────────────────────────────────────────────────────────────
 
-    mock_resp = _make_mock_response()
-    mock_openai = MagicMock()
-    mock_openai.return_value.chat.completions.create.return_value = mock_resp
+def test_cancelled_before_call_raises() -> None:
+    client, _ = _make_client()
+    token = CancelToken()
+    token.set()
+    with pytest.raises(CancelledError):
+        client.stream_chat([{"role": "user", "content": "hi"}], cancel_token=token)
 
-    messages = [
-        {"role": "user", "content": "hi"},
-        {
-            "role": "assistant",
-            "content": "",
-            "tool_calls": [
-                {
-                    "id": "call_1",
-                    "type": "function",
-                    "function": {"name": "x", "arguments": "{}"},
-                }
-            ],
-        },
+
+def test_cancelled_mid_stream_raises() -> None:
+    client, fake_openai = _make_client()
+    token = CancelToken()
+
+    chunks = [
+        FakeStreamChunk(delta=FakeDelta(content="a")),
+        FakeStreamChunk(delta=FakeDelta(content="b")),
     ]
 
-    with patch("pa_agent.ai.deepseek_client._OpenAI", mock_openai):
-        client.chat(messages)
+    def _stream_that_allows_cancel(**kwargs):
+        token.set()  # 第二个 chunk 前置取消
+        return iter(chunks)
 
-    sent_messages = mock_openai.return_value.chat.completions.create.call_args.kwargs["messages"]
-    assert sent_messages[1]["reasoning_content"] == ""
+    fake_openai.return_value.chat.completions.create.side_effect = _stream_that_allows_cancel
+    with patch("pa_agent.ai.deepseek_client._OpenAI", fake_openai):
+        with pytest.raises(CancelledError):
+            client.stream_chat([{"role": "user", "content": "hi"}], cancel_token=token)
+
+
+# ── stream_options fallback ───────────────────────────────────────────────────
+
+def test_retries_without_stream_options_when_rejected() -> None:
+    client, fake_openai = _make_client()
+    calls: list[dict] = []
+
+    def _create(**kwargs):
+        calls.append(kwargs)
+        if "stream_options" in kwargs:
+            raise RuntimeError("stream_options unsupported")
+        return iter([FakeStreamChunk(delta=FakeDelta(content="ok"), usage=_fake_usage())])
+
+    fake_openai.return_value.chat.completions.create.side_effect = _create
+    with patch("pa_agent.ai.deepseek_client._OpenAI", fake_openai):
+        reply = client.stream_chat([{"role": "user", "content": "hi"}])
+
+    assert reply.content == "ok"
+    assert len(calls) == 2
+    assert "stream_options" not in calls[1]
+
+
+# ── Usage parsing / misc ──────────────────────────────────────────────────────
+
+def test_extract_cached_tokens_standard_field_only() -> None:
+    usage = MagicMock()
+    usage.prompt_tokens_details = MagicMock()
+    usage.prompt_tokens_details.cached_tokens = 77
+    assert _extract_cached_prompt_tokens(usage) == 77
+    assert _extract_cached_prompt_tokens(None) == 0
+    empty = MagicMock()
+    empty.prompt_tokens_details = MagicMock()
+    empty.prompt_tokens_details.cached_tokens = 0
+    assert _extract_cached_prompt_tokens(empty) == 0
+
+
+def test_aiusage_cache_helpers() -> None:
+    u = AIUsage(prompt_tokens=200, cached_prompt_tokens=50, completion_tokens=10, total_tokens=210)
+    assert u.cache_hit_rate == pytest.approx(0.25)
+    assert u.cache_miss_tokens == 150
+    assert AIUsage().cache_hit_rate == 0.0
+
+
+def test_kv_prefix_chain_always_supported() -> None:
+    assert supports_kv_prefix_chain(None) is True
+    assert supports_kv_prefix_chain(_make_settings()) is True
+
+
+def test_empty_content_still_returns_reply() -> None:
+    client, fake_openai = _make_client()
+    chunks = [FakeStreamChunk(delta=FakeDelta(content="")), FakeStreamChunk(usage=_fake_usage())]
+    fake_openai.return_value.chat.completions.create.return_value = iter(chunks)
+    with patch("pa_agent.ai.deepseek_client._OpenAI", fake_openai):
+        reply = client.stream_chat([{"role": "user", "content": "hi"}])
+    assert reply.content == ""
+    assert reply.usage.prompt_tokens == 100

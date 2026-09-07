@@ -4,33 +4,30 @@ from __future__ import annotations
 import logging
 
 from pa_agent.ai.deepseek_client import AIUsage
+from pa_agent.util.signals import Signal
 
 logger = logging.getLogger(__name__)
 
-from PyQt6.QtCore import QObject, pyqtSignal
 
-
-class SessionTokenLedger(QObject):
+class SessionTokenLedger:
     """Accumulates token usage across API calls in a session.
 
-    Signals
-    -------
+    Signals (Qt-free; use ``.connect(fn)``)
+    --------------------------------------
     threshold_crossed(str, dict)
         Emitted when context usage crosses warn_pct or 95%.
     updated(dict)
         Emitted after every add() with the current totals dict.
     """
 
-    threshold_crossed = pyqtSignal(str, dict)
-    updated = pyqtSignal(dict)
-
     def __init__(
         self,
         context_window: int = 1_000_000,
         warn_pct: float = 80.0,
-        parent: "QObject | None" = None,
+        parent: object | None = None,
     ) -> None:
-        super().__init__(parent)
+        self.updated = Signal(dict)
+        self.threshold_crossed = Signal(str, dict)
         self._context_window = context_window
         self._warn_pct = warn_pct
         self._yellow_fired = False

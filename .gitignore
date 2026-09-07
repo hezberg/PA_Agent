@@ -40,6 +40,8 @@ experience/**/*
 trade_records/*
 !trade_records/.gitkeep
 
+data_cache/*
+
 # ── 本地临时 / 解包产物（WorkBuddy、网关调试等）──────────────────────────────
 _tmp_wb_asar/
 _tmp_auth.js
@@ -73,6 +75,8 @@ MAC*.txt
 .vscode/
 .cursor/
 .kiro/
+.commandcode/
+.zcode/
 
 # ── tools 目录下的本地诊断输出（保留 .py 脚本本身）──────────────────────────
 tools/_pending_order_report.txt
@@ -87,3 +91,9 @@ docs/changelog/
 Thumbs.db
 Desktop.ini
 .DS_Store
+
+# Web frontend
+web/node_modules/
+
+# 备份配置文件(含密钥)不入库
+config/*.bak*

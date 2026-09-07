@@ -1,25 +1,25 @@
-"""1 Hz data refresh loop running on a dedicated QThread."""
+"""1 Hz data refresh loop running on a dedicated thread (Qt-free)."""
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from typing import TYPE_CHECKING
 
-from pa_agent.data.base import DataSource, DataSourceTransientError, KlineBar
+from pa_agent.data.base import DataSource, DataSourceTransientError
 from pa_agent.data.snapshot import INDICATOR_WARMUP_BARS
+from pa_agent.util.signals import Signal
 
 if TYPE_CHECKING:
     from pa_agent.util.threading import CancelToken
 
 logger = logging.getLogger(__name__)
 
-from PyQt6.QtCore import QThread, pyqtSignal, QObject
 
-
-class RefreshLoop(QThread):
+class RefreshLoop(threading.Thread):
     """Fetches the latest K-line snapshot every *interval_ms* milliseconds.
 
-    Signals
+    Signals (Qt-free; use ``.connect(fn)``)
     -------
     frame_ready(list[KlineBar])
         Emitted after each successful fetch with the raw bar list (newest-first).
@@ -27,22 +27,17 @@ class RefreshLoop(QThread):
         Emitted with a human-readable status string (e.g. "数据延迟").
     """
 
-    frame_ready = pyqtSignal(list)
-    status_changed = pyqtSignal(str)
-
-    # Backoff constants
-    _MAX_BACKOFF_S = 10.0       # cap exponential backoff at 10 seconds
-    _BACKOFF_BASE_S = 0.5      # initial backoff = 0.5s, doubles each failure
-
     def __init__(
         self,
         data_source: DataSource,
         n_bars: int,
         interval_ms: int = 1000,
         cancel_token: "CancelToken | None" = None,
-        parent: "QObject | None" = None,
+        parent: object | None = None,
     ) -> None:
-        super().__init__(parent)
+        super().__init__(name="RefreshLoop", daemon=True)
+        self.frame_ready = Signal(list)
+        self.status_changed = Signal(str)
         self._source = data_source
         self._n_bars = n_bars
         self._interval_ms = interval_ms
@@ -50,6 +45,15 @@ class RefreshLoop(QThread):
         self._consecutive_failures = 0
         self._failure_threshold_s = 5.0
         self._in_flight = False  # guard against overlapping fetches
+        self._first_fetch_pending = True  # 首帧未到（重试文案带次数）
+
+    # Compatibility shims for historical QThread call sites (isRunning/wait).
+    def isRunning(self) -> bool:  # noqa: N802
+        return self.is_alive()
+
+    def wait(self, timeout_ms: int | None = None) -> bool:
+        self.join(max(0.0, (timeout_ms or 0) / 1000.0))
+        return not self.is_alive()
 
     def run(self) -> None:  # noqa: C901
         """Main loop — runs on the worker thread."""
@@ -80,6 +84,7 @@ class RefreshLoop(QThread):
                     self._consecutive_failures = 0
                     failure_start = None
                     if bars:
+                        self._first_fetch_pending = False
                         self.frame_ready.emit(bars)
 
                 except DataSourceTransientError as exc:
@@ -88,10 +93,18 @@ class RefreshLoop(QThread):
                     if failure_start is None:
                         failure_start = time.monotonic()
                     user_msg = str(exc).strip()
-                    if user_msg:
-                        self.status_changed.emit(user_msg)
                     elapsed = time.monotonic() - failure_start
-                    if elapsed >= self._failure_threshold_s and not user_msg:
+                    if self._first_fetch_pending:
+                        # 首帧未到：进度文案带重试次数，让用户知道仍在获取。
+                        retry_note = f"正在重试（第 {self._consecutive_failures} 次）…"
+                        self.status_changed.emit(
+                            f"{user_msg}，{retry_note}"
+                            if user_msg
+                            else f"尚未获取到数据，{retry_note}"
+                        )
+                    elif user_msg:
+                        self.status_changed.emit(user_msg)
+                    elif elapsed >= self._failure_threshold_s:
                         self.status_changed.emit("数据延迟")
                 except Exception as exc:  # noqa: BLE001
                     logger.error("RefreshLoop unexpected error: %s", exc, exc_info=True)
@@ -102,8 +115,8 @@ class RefreshLoop(QThread):
             # TradingView's WebSocket endpoint
             if self._consecutive_failures > 0:
                 backoff_s = min(
-                    self._BACKOFF_BASE_S * (2 ** (self._consecutive_failures - 1)),
-                    self._MAX_BACKOFF_S,
+                    0.5 * (2 ** (self._consecutive_failures - 1)),
+                    10.0,
                 )
                 logger.debug(
                     "RefreshLoop backoff %.1fs after %d consecutive failure(s)",
@@ -117,4 +130,3 @@ class RefreshLoop(QThread):
             sleep_ms = max(0.0, self._interval_ms - elapsed_ms)
             if sleep_ms > 0:
                 time.sleep(sleep_ms / 1000.0)
-
