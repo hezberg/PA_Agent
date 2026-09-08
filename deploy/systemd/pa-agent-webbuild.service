@@ -1,0 +1,13 @@
+[Unit]
+Description=PA Agent WebUI frontend rebuild watcher (vite build --watch)
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/PA_Agent/web
+ExecStart=/home/ubuntu/PA_Agent/scripts/web_watch.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

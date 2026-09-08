@@ -1,0 +1,17 @@
+[Unit]
+Description=PA Agent WebUI (FastAPI on tailnet IP, auto-reload)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/PA_Agent
+# 先同步构建一次前端，保证 dist 就绪后再启动后端（与 webbuild 服务通过 flock 互斥）。
+ExecStartPre=/home/ubuntu/PA_Agent/scripts/web_build_once.sh
+ExecStart=/home/ubuntu/PA_Agent/scripts/serve_tailnet.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
