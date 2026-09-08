@@ -133,10 +133,14 @@ def _build_order_html(
     probs: dict = ncp.get("probabilities") or {}
     ncp_reasoning = escape(_truncate((ncp.get("reasoning") or "").strip(), 400))
     if probs:
+        from pa_agent.ai.cycle_enums import format_cycle_position
+
         best_key = max(probs, key=lambda k: probs[k])
-        next_cycle_str = f"{escape(str(best_key))}（概率 {probs[best_key]}）"
+        next_cycle_str = f"{escape(format_cycle_position(best_key))}（概率 {probs[best_key]}%）"
     elif ncp.get("cycle"):
-        next_cycle_str = escape(_fmt(ncp.get("cycle")))
+        from pa_agent.ai.cycle_enums import format_cycle_position
+
+        next_cycle_str = escape(format_cycle_position(_fmt(ncp.get("cycle"))))
     else:
         next_cycle_str = "—"
 

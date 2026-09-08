@@ -217,14 +217,19 @@ def _build_card(
     dir_label, color = _direction_style(order_dir)
 
     # 下一个市场周期
+    # 下一个市场周期（枚举转中文展示）
     probs: dict = ncp.get("probabilities") or {}
     ncp_reasoning = _truncate((ncp.get("reasoning") or "").strip(), 400)
     if probs:
+        from pa_agent.ai.cycle_enums import format_cycle_position
+
         best_key = max(probs, key=lambda k: probs[k])
         best_prob = probs[best_key]
-        next_cycle_str = f"{best_key}（概率 {best_prob}）"
+        next_cycle_str = f"{format_cycle_position(best_key)}（概率 {best_prob}%）"
     elif ncp.get("cycle"):
-        next_cycle_str = _fmt(ncp.get("cycle"))
+        from pa_agent.ai.cycle_enums import format_cycle_position
+
+        next_cycle_str = format_cycle_position(_fmt(ncp.get("cycle")))
     else:
         next_cycle_str = "—"
 
