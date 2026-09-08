@@ -263,6 +263,8 @@ function FeishuModal({ settings, onClose }: { settings: SettingsPayload; onClose
   const feishu = settings.feishu as Record<string, unknown>
   const [webhookUrl, setWebhookUrl] = useState(String(feishu.webhook_url ?? ''))
   const [secret, setSecret] = useState(String(feishu.secret ?? ''))
+  const [appId, setAppId] = useState(String(feishu.app_id ?? ''))
+  const [appSecret, setAppSecret] = useState(String(feishu.app_secret ?? ''))
   const [enabled, setEnabled] = useState(Boolean(feishu.enabled ?? true))
   const [notifyOnOrderOnly, setNotifyOnOrderOnly] = useState(Boolean(feishu.notify_on_order_only ?? true))
   const [msg, setMsg] = useState('')
@@ -272,6 +274,8 @@ function FeishuModal({ settings, onClose }: { settings: SettingsPayload; onClose
   async function save() {
     feishu.webhook_url = webhookUrl.trim()
     if (secret.trim()) feishu.secret = secret.trim()
+    feishu.app_id = appId.trim()
+    feishu.app_secret = appSecret.trim()
     feishu.enabled = enabled
     feishu.notify_on_order_only = notifyOnOrderOnly
     const err = await saveSettings(settings)
@@ -301,6 +305,25 @@ function FeishuModal({ settings, onClose }: { settings: SettingsPayload; onClose
       <div className="form-row">
         <label>签名 Secret</label>
         <input type="password" value={secret} onChange={(e) => setSecret(e.target.value)} placeholder="留空表示未启用签名" />
+      </div>
+      <div className="form-row">
+        <label>App ID（可选）</label>
+        <input type="text" value={appId} onChange={(e) => setAppId(e.target.value)} placeholder="open.feishu.cn 自建应用" />
+      </div>
+      <div className="form-row">
+        <label>App Secret（可选）</label>
+        <input
+          type="password"
+          value={appSecret}
+          onChange={(e) => setAppSecret(e.target.value)}
+          placeholder="仅在通知中附带图表截图时需要"
+        />
+      </div>
+      <div className="form-row">
+        <label />
+        <span className="form-hint" style={{ marginLeft: 0 }}>
+          App 凭证仅用于上传图表截图；仅推送文字/卡片时无需填写。
+        </span>
       </div>
       <div className="form-row">
         <label>仅下单信号时通知</label>
@@ -345,8 +368,8 @@ function Modal({
         <div className="modal-body">{children}</div>
         {(error || info) && (
           <div className="modal-body" style={{ paddingTop: 0 }}>
-            {error && <div style={{ color: 'var(--danger)', whiteSpace: 'pre-wrap' }}>{error}</div>}
-            {info && <div style={{ color: 'var(--success)', whiteSpace: 'pre-wrap' }}>{info}</div>}
+            {error && <div className="form-error">{error}</div>}
+            {info && <div className="form-ok">{info}</div>}
           </div>
         )}
         <div className="modal-footer">

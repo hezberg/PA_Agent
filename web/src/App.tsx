@@ -1,15 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 import { api, openStream } from './api/client'
 import { useStore } from './store'
-import ControlBar from './components/ControlBar'
+import TopBar from './components/TopBar'
 import FlowBar from './components/FlowBar'
-import SummaryStrip from './components/SummaryStrip'
 import ChartPanel from './components/ChartPanel'
 import Sidebar from './components/Sidebar'
 import StatusBar from './components/StatusBar'
 import Toasts from './components/Toasts'
 import SettingsModals from './components/SettingsModals'
+import { CandleIcon } from './icons'
 import type { DecisionPanelPayload, FramePayload, Meta, UiState } from './api/types'
+
+const CHART_OPEN_KEY = 'pa.chart.open'
 
 /** Beep via WebAudio (order-opportunity alert; replaces Qt QApplication.beep). */
 function beep() {
@@ -33,6 +35,17 @@ export default function App() {
   const store = useStore()
   const analysisCloser = useRef<null | (() => void)>(null)
   const demoCloser = useRef<null | (() => void)>(null)
+
+  // K 线展开状态：默认收起（工作场景低调），用户选择在本机记住；#chart 深链直达展开态。
+  const [chartOpen, setChartOpen] = useState(() =>
+    window.location.hash === '#chart' || localStorage.getItem(CHART_OPEN_KEY) === '1',
+  )
+  function toggleChart() {
+    setChartOpen((v) => {
+      localStorage.setItem(CHART_OPEN_KEY, v ? '0' : '1')
+      return !v
+    })
+  }
 
   useEffect(() => {
     // ── Bootstrap static + dynamic meta ────────────────────────────────────
@@ -174,17 +187,16 @@ export default function App() {
 
   return (
     <div className="app">
-      <MenuBar />
-      <ControlBar />
-      <div className="api-alert" style={{ display: store.meta?.api_key_configured ? 'none' : undefined }}>
-        未配置 API Key：请点击上方「AI 模型设置」，在设置中填写 API Key 后才能进行 AI 分析。
-      </div>
-      <div className="disclaimer">分析仅供参考，不构成投资建议</div>
-      <StatusRow />
+      <TopBar />
       <FlowBar />
-      <SummaryStrip />
       <div className="workbench">
-        <ChartPanel />
+        {!chartOpen && (
+          <button className="rail" title="展开 K 线图" onClick={toggleChart}>
+            <CandleIcon />
+            <span className="rail-txt">K 线</span>
+          </button>
+        )}
+        <ChartPanel open={chartOpen} onCollapse={toggleChart} />
         <Sidebar />
       </div>
       <StatusBar />
@@ -222,70 +234,4 @@ function attachAnalysisStream(channel: string): () => void {
         break
     }
   })
-}
-
-function MenuBar() {
-  const openModal = useStore((s) => s.openModal)
-  const demo = useStore((s) => s.ui?.demo_mode)
-  return (
-    <div className="menu-bar">
-      <button onClick={() => openModal('ai')}>AI 模型设置</button>
-      <button onClick={() => openModal('feishu')}>飞书发送通知设置</button>
-      <button onClick={() => openModal('general')}>其他通用设置</button>
-      <div className="spacer" />
-      <button
-        onClick={async () => {
-          if (demo) {
-            await api.post('/api/demo/stop')
-          } else {
-            const r = await api.post('/api/demo/start', { mode: 'auto' })
-            if (!r.ok) useStore.getState().pushToast({ level: 'error', title: '演示模式', message: r.error ?? '' })
-          }
-        }}
-      >
-        {demo ? '退出演示模式' : '演示模式'}
-      </button>
-    </div>
-  )
-}
-
-function StatusRow() {
-  const lastRefreshTs = useStore((s) => s.lastRefreshTs)
-  const paused = useStore((s) => s.ui?.chart_refresh_paused)
-  const [now] = useStateWithInterval()
-
-  let elapsedLabel = '距上次刷新: —'
-  let cls = ''
-  if (paused) {
-    elapsedLabel = '图表刷新已暂停'
-    cls = 'paused'
-  } else if (lastRefreshTs > 0) {
-    const elapsed = Math.max(0, Math.floor((now - lastRefreshTs) / 1000))
-    const m = Math.floor(elapsed / 60)
-    const s = elapsed % 60
-    elapsedLabel = elapsed < 60 ? `距上次刷新: ${elapsed}s` : `距上次刷新: ${m}m${String(s).padStart(2, '0')}s`
-    if (elapsed > 10) cls = 'stale'
-  }
-  return (
-    <div className="status-row">
-      {countdownLabel()}
-      <span className={cls}>{elapsedLabel}</span>
-    </div>
-  )
-}
-
-function countdownLabel(): string | null {
-  const ui = useStore((s) => s.ui)
-  if (!ui?.wait_close?.armed) return null
-  const secs = ui.wait_close.seconds_remaining
-  return secs !== null && secs !== undefined ? `还剩 ${secs} 秒` : null
-}
-
-function useStateWithInterval(): [number, () => void] {
-  const [now, setNow] = useState(Date.now())
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(t)
-  }, [])
-  return [now, () => setNow(Date.now())]
 }

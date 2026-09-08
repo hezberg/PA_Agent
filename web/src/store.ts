@@ -246,3 +246,11 @@ export const useStore = create<Store>((set) => ({
 }))
 
 export { FLOW_STEPS }
+
+// 调试钩子：控制台可用 __pa_store.getState() 检查/注入状态（亦用于自动化验收）。
+declare global {
+  interface Window {
+    __pa_store?: typeof useStore
+  }
+}
+if (typeof window !== 'undefined') window.__pa_store = useStore

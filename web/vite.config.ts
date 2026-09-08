@@ -15,6 +15,8 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
+    // watch 增量构建时不清空 dist：服务器正在伺服该目录，清空会让页面瞬间 404。
+    emptyOutDir: false,
     chunkSizeWarningLimit: 1500,
   },
 })

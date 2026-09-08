@@ -7,6 +7,7 @@ function pick(obj: Record<string, unknown>, key: string): string {
   return String(v)
 }
 
+// 详情 tab：决策票之外的完整决策明细（诊断 / 交易者方程 / 失效条件 / 阶段 JSON）。
 export default function DecisionTab() {
   const decision = useStore((s) => s.decision)
   if (!decision || !decision.decision_inner || Object.keys(decision.decision_inner).length === 0) {
@@ -15,24 +16,9 @@ export default function DecisionTab() {
 
   const d = decision.decision_inner as Record<string, unknown>
   const diag = (decision.diagnosis_summary ?? {}) as Record<string, unknown>
-  const orderType = String(d.order_type ?? '—')
-  const stance = decision.decision_stance ?? '—'
 
   return (
     <div>
-      <div className="panel-section">
-        <div className="panel-title">交易决策 · {orderType}</div>
-        <Pill text={orderType} />
-        <div className="kv-row"><span className="kv-key">方向</span><span className="kv-value">{pick(d, 'order_direction')}</span></div>
-        <div className="kv-row"><span className="kv-key">入场价</span><span className="kv-value">{pick(d, 'entry_price')}</span></div>
-        <div className="kv-row"><span className="kv-key">止损价</span><span className="kv-value">{pick(d, 'stop_loss_price')}</span></div>
-        <div className="kv-row"><span className="kv-key">止盈 TP1</span><span className="kv-value">{pick(d, 'take_profit_price')}</span></div>
-        <div className="kv-row"><span className="kv-key">止盈 TP2</span><span className="kv-value">{pick(d, 'take_profit_price_2')}</span></div>
-        <div className="kv-row"><span className="kv-key">交易信心</span><span className="kv-value">{tradeConfidence(d, decision.confidence_threshold)}</span></div>
-        <div className="kv-row"><span className="kv-key">预期盈亏比</span><span className="kv-value">{pick(d, 'risk_reward_ratio')}</span></div>
-        <div className="kv-row"><span className="kv-key">倾向</span><span className="kv-value">{String(stance)}</span></div>
-      </div>
-
       <div className="panel-section">
         <div className="panel-title">市场诊断</div>
         <div className="kv-row"><span className="kv-key">当前周期</span><span className="kv-value">{pick(diag, 'cycle_position')}</span></div>
@@ -55,31 +41,24 @@ export default function DecisionTab() {
         <div className="panel-title">失效条件</div>
         <div className="kv-value" style={{ whiteSpace: 'pre-wrap' }}>{pick(d, 'invalidation_condition')}</div>
       </div>
+
+      {decision.stage_results.length > 0 && (
+        <div className="panel-section">
+          <div className="panel-title">阶段完整输出</div>
+          {decision.stage_results.map((sr) => (
+            <details key={sr.stage} style={{ marginBottom: 4 }}>
+              <summary style={{ cursor: 'pointer', fontSize: 12, color: 'var(--accent)' }}>
+                {sr.title}
+              </summary>
+              <pre style={{ fontSize: 11, whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: '6px 0 0' }}>
+                {sr.content}
+              </pre>
+            </details>
+          ))}
+        </div>
+      )}
     </div>
   )
-}
-
-function tradeConfidence(d: Record<string, unknown>, threshold: number): string {
-  const raw = d.trade_confidence
-  if (raw === null || raw === undefined || raw === '') return '—'
-  let val: number | null = null
-  try {
-    val = Math.max(0, Math.min(100, Number(raw)))
-  } catch {
-    return String(raw)
-  }
-  if (Number.isNaN(val)) return String(raw)
-  const pass = threshold > 0 && val >= threshold
-  return `${val}% ${pass ? '（≥阈值，通过）' : threshold > 0 ? `（阈值 ${threshold}%）` : ''}`
-}
-
-function Pill({ text }: { text: string }) {
-  const cls = text.includes('限价') || text.includes('市价') || text.includes('突破')
-    ? 'pill green'
-    : text === '不下单'
-      ? 'pill amber'
-      : 'pill blue'
-  return <span className={cls} style={{ marginBottom: 6 }}>{text}</span>
 }
 
 function Levels({ title, levels }: { title: string; levels: (string | StructureLevel)[] }) {

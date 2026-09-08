@@ -9,9 +9,20 @@ import {
   Time,
 } from 'lightweight-charts'
 import { useStore } from '../store'
+import { tfZh, useSymbolName } from '../symbolName'
+import { ChevronLeftIcon } from '../icons'
 import type { StructureLevel } from '../api/types'
 
-export default function ChartPanel() {
+// Rosé Pine 图表配色（红涨绿跌，低对比）
+const CHART_BG = '#191724'
+const CHART_GRID = '#26233a'
+const CHART_TEXT = '#908caa'
+const CHART_BORDER = '#322f4d'
+const UP = '#eb6f92'
+const DOWN = '#79a290'
+const EMA = '#f6c177'
+
+export default function ChartPanel({ open, onCollapse }: { open: boolean; onCollapse: () => void }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const candleRef = useRef<ISeriesApi<'Candlestick'> | null>(null)
@@ -21,34 +32,35 @@ export default function ChartPanel() {
 
   const frame = useStore((s) => s.frame)
   const decision = useStore((s) => s.decision)
+  const name = useSymbolName(frame?.symbol)
 
   useEffect(() => {
     if (!wrapRef.current || chartRef.current) return
     const chart = createChart(wrapRef.current, {
       layout: {
-        background: { type: ColorType.Solid, color: '#0a0e14' },
-        textColor: '#8b949e',
-        fontFamily: 'var(--font-ui)',
+        background: { type: ColorType.Solid, color: CHART_BG },
+        textColor: CHART_TEXT,
+        fontFamily: "var(--font-ui)",
       },
       grid: {
-        vertLines: { color: '#1c2128' },
-        horzLines: { color: '#1c2128' },
+        vertLines: { color: CHART_GRID },
+        horzLines: { color: CHART_GRID },
       },
-      timeScale: { borderColor: '#30363d', timeVisible: true, secondsVisible: false },
-      rightPriceScale: { borderColor: '#30363d' },
+      timeScale: { borderColor: CHART_BORDER, timeVisible: true, secondsVisible: false },
+      rightPriceScale: { borderColor: CHART_BORDER },
       autoSize: true,
     })
     // A 股惯例：红涨绿跌
     const candles = chart.addCandlestickSeries({
-      upColor: '#ef4444',
-      downColor: '#22c55e',
-      borderUpColor: '#ef4444',
-      borderDownColor: '#22c55e',
-      wickUpColor: '#ef4444',
-      wickDownColor: '#22c55e',
+      upColor: UP,
+      downColor: DOWN,
+      borderUpColor: UP,
+      borderDownColor: DOWN,
+      wickUpColor: UP,
+      wickDownColor: DOWN,
     })
     const ema = chart.addLineSeries({
-      color: '#fbbf24',
+      color: EMA,
       lineWidth: 1,
       priceLineVisible: false,
       lastValueVisible: false,
@@ -77,7 +89,7 @@ export default function ChartPanel() {
       high: b.high,
       low: b.low,
       close: b.close,
-      color: b.closed ? undefined : 'rgba(230,237,243,0.45)',
+      color: b.closed ? undefined : 'rgba(224,222,244,0.45)',
     }))
     candles.setData(candleData)
 
@@ -113,15 +125,15 @@ export default function ChartPanel() {
       const v = raw === null || raw === undefined || raw === '' ? NaN : Number(raw)
       if (!Number.isNaN(v) && v > 0) lines.push({ price: v, color, title })
     }
-    push('entry_price', '#38bdf8', '入场')
-    push('take_profit_price', '#22c55e', 'TP1')
-    push('take_profit_price_2', '#22c55e', 'TP2')
-    push('stop_loss_price', '#ef4444', '止损')
+    push('entry_price', '#9ccfd8', '入场')
+    push('take_profit_price', '#eb6f92', 'TP1')
+    push('take_profit_price_2', '#eb6f92', 'TP2')
+    push('stop_loss_price', '#79a290', '止损')
 
     for (const level of (decision?.support_resistance ?? []) as StructureLevel[]) {
       lines.push({
         price: level.price,
-        color: level.kind === 'support' ? 'rgba(34,197,94,0.55)' : 'rgba(239,68,68,0.55)',
+        color: level.kind === 'support' ? 'rgba(121,162,144,0.55)' : 'rgba(235,111,146,0.55)',
         title: level.label,
       })
     }
@@ -145,5 +157,27 @@ export default function ChartPanel() {
     fitOnNext.current = true
   }, [frame?.symbol, frame?.timeframe])
 
-  return <div ref={wrapRef} className="chart-area" />
+  // The chart container changes size when toggled; refit once it is visible again.
+  useEffect(() => {
+    if (!open) return
+    const id = requestAnimationFrame(() => chartRef.current?.timeScale().fitContent())
+    return () => cancelAnimationFrame(id)
+  }, [open])
+
+  return (
+    <section className={`chart-area${open ? '' : ' collapsed'}`} aria-label="K线图">
+      <div ref={wrapRef} className="chart-canvas" />
+      {frame && (
+        <span className="chart-badge">
+          {name && <>{name} </>}
+          {frame.symbol} · {tfZh(frame.timeframe)}
+        </span>
+      )}
+      {open && (
+        <button className="chart-collapse" title="收起 K 线图" onClick={onCollapse}>
+          <ChevronLeftIcon /> 收起
+        </button>
+      )}
+    </section>
+  )
 }
