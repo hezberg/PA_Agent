@@ -678,6 +678,13 @@ details.reasoning .r-body {
 .kv-row { display: flex; gap: 8px; padding: 2px 0; font-size: 12.5px; }
 .kv-key { color: var(--fg-3); flex-shrink: 0; width: 96px; }
 .kv-value { word-break: break-word; min-width: 0; }
+/* 专业术语：虚线下划线标记「悬停有解释」 */
+.term {
+  text-decoration: underline dotted;
+  text-decoration-color: var(--fg-3);
+  text-underline-offset: 3px;
+  cursor: help;
+}
 
 .pill {
   display: inline-block;

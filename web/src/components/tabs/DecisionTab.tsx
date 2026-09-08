@@ -1,10 +1,23 @@
 import { useStore } from '../../store'
+import { zhTerm, termHint } from '../../zhTerms'
 import type { StructureLevel } from '../../api/types'
 
 function pick(obj: Record<string, unknown>, key: string): string {
   const v = obj?.[key]
   if (v === null || v === undefined || v === '') return '—'
   return String(v)
+}
+
+// 枚举值 → 中文展示，鼠标悬停显示术语含义
+function TermValue({ value }: { value: string | null | undefined }) {
+  const zh = zhTerm(value)
+  const hint = termHint(value)
+  if (!hint) return <span className="kv-value">{zh}</span>
+  return (
+    <span className="kv-value term" title={hint}>
+      {zh}
+    </span>
+  )
 }
 
 // 详情 tab：决策票之外的完整决策明细（诊断 / 交易者方程 / 失效条件 / 阶段 JSON）。
@@ -21,9 +34,33 @@ export default function DecisionTab() {
     <div>
       <div className="panel-section">
         <div className="panel-title">市场诊断</div>
-        <div className="kv-row"><span className="kv-key">当前周期</span><span className="kv-value">{pick(diag, 'cycle_position')}</span></div>
-        <div className="kv-row"><span className="kv-key">方向</span><span className="kv-value">{pick(diag, 'direction')}</span></div>
-        <div className="kv-row"><span className="kv-key">阶段判断</span><span className="kv-value">{pick(diag, 'phase')}</span></div>
+        <div className="kv-row"><span className="kv-key">当前周期</span><TermValue value={pick(diag, 'cycle_position')} /></div>
+        {pick(diag, 'alternative_cycle_position') !== '—' && (
+          <div className="kv-row"><span className="kv-key">备选周期</span><TermValue value={pick(diag, 'alternative_cycle_position')} /></div>
+        )}
+        <div className="kv-row"><span className="kv-key">方向</span><TermValue value={pick(diag, 'direction')} /></div>
+        {pick(diag, 'market_phase') !== '—' && (
+          <div className="kv-row"><span className="kv-key">状态阶段</span><TermValue value={pick(diag, 'market_phase')} /></div>
+        )}
+        {pick(diag, 'climax_risk') !== '—' && pick(diag, 'climax_risk') !== 'none' && (
+          <div className="kv-row"><span className="kv-key">高潮风险</span><TermValue value={pick(diag, 'climax_risk')} /></div>
+        )}
+        {pick(diag, 'transition_risk') !== '—' && (
+          <div className="kv-row"><span className="kv-key">转换误判风险</span><TermValue value={pick(diag, 'transition_risk')} /></div>
+        )}
+        {Array.isArray(diag.detected_patterns) && (diag.detected_patterns as string[]).length > 0 && (
+          <div className="kv-row">
+            <span className="kv-key">检测形态</span>
+            <span className="kv-value">
+              {(diag.detected_patterns as string[]).map((p, i) => (
+                <span key={p + i}>
+                  {i > 0 && '、'}
+                  <span className="term" title={termHint(p)}>{zhTerm(p)}</span>
+                </span>
+              ))}
+            </span>
+          </div>
+        )}
         <Levels title="支撑位" levels={(decision.stage1_diagnosis?.support_levels as string[]) ?? []} />
         <Levels title="阻力位" levels={(decision.stage1_diagnosis?.resistance_levels as string[]) ?? []} />
       </div>
