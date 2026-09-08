@@ -97,6 +97,17 @@ def _truncate(text: str, max_len: int = 600) -> str:
     return text[:max_len] + "…"
 
 
+def _display_symbol(symbol: str) -> str:
+    """股票代码 → 「名称（代码）」；缓存里查不到（如 MT5/期货代码）原样返回。"""
+    try:
+        from pa_agent.data.symbol_search import symbol_name
+
+        name = symbol_name(symbol)
+    except Exception:  # noqa: BLE001 — 名称反查失败不应阻断推送
+        name = None
+    return f"{escape(name)}（{escape(symbol)}）" if name else escape(str(symbol))
+
+
 def _build_order_html(
     *,
     decision_inner: dict,
@@ -106,6 +117,7 @@ def _build_order_html(
 ) -> str:
     dec = decision_inner or {}
     ncp: dict = stage2_full.get("next_cycle_prediction") or {}
+    sym = _display_symbol(symbol)
 
     order_type = _fmt(dec.get("order_type"))
     order_dir = _fmt(dec.get("order_direction"))
@@ -131,7 +143,7 @@ def _build_order_html(
     lines = [
         "<h3>PA Agent 下单信号</h3>",
         "<p>",
-        f"<b>品种</b>：{escape(symbol)}　<b>周期</b>：{escape(timeframe)}<br>",
+        f"<b>品种</b>：{sym}　<b>周期</b>：{escape(timeframe)}<br>",
         f"<b>下单类型</b>：{escape(order_type)}　<b>方向</b>：{escape(order_dir)}<br>",
         f"<b>入场价</b>：{escape(entry)}　<b>止损</b>：{escape(stop)}　<b>TP1</b>：{escape(tp)}　<b>TP2</b>：{escape(tp2)}<br>",
         f"<b>置信度</b>：{escape(trade_conf)}　<b>预估胜率</b>：{escape(win_rate)}",
@@ -161,7 +173,7 @@ def send_order_signal(
     if not pushplus_is_active(settings):
         return False
 
-    title = f"PA Agent 下单信号 — {symbol} {timeframe}"
+    title = f"PA Agent 下单信号 — {_display_symbol(symbol)} {escape(timeframe)}"
     html_content = _build_order_html(
         decision_inner=decision_inner,
         stage2_full=stage2_full,

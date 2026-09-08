@@ -70,7 +70,7 @@ class GeneralSettings(BaseModel):
     #: TradingView 交易所；空字符串 =（自动）依次探测预设列表
     last_tradingview_exchange: str = ""
     last_symbol: str = "XAUUSDm"
-    last_timeframe: str = "15m"
+    last_timeframe: str = "1d"
     decision_flow_auto_play: bool = True
     decision_flow_play_seconds: int = 50
     #: 阶段二给出限价/突破/市价单时：警报音、弹窗，并自动切到「决策」页（跳过决策树可视化演示）

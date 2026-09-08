@@ -30,8 +30,10 @@ def frame_to_dict(frame: KlineFrame) -> dict[str, Any]:
         "timeframe": frame.timeframe,
         "snapshot_ts_local_ms": frame.snapshot_ts_local_ms,
         "bars": bars,
-        "ema20": [v if v == v else None for v in frame.indicators.ema20],
-        "atr14": [v if v == v else None for v in frame.indicators.atr14],
+        # 指标与 bars 同为最新优先，一并反转保持下标对齐；否则前端画出的 EMA
+        # 会时间镜像，且 EMA 预热期 NaN 落在最新一段，曲线末端缺一截
+        "ema20": [v if v == v else None for v in reversed(frame.indicators.ema20)],
+        "atr14": [v if v == v else None for v in reversed(frame.indicators.atr14)],
     }
 
 

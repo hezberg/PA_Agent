@@ -113,15 +113,15 @@ def submit_block_reason(
 ) -> str | None:
     """Human-readable reason when submit must stay disabled, or None."""
     if not api_key_configured:
-        return "未配置 API Key，请点击左上角「AI 模型」填写后才能分析"
+        return "未配置 API Key，请在「设置 → AI 模型设置」中填写后再分析"
     if demo_mode:
-        return "演示模式中，请退出演示后再提交真实分析"
+        return "演示模式中，退出演示后才能提交真实分析"
     if analysis_in_progress:
         return "分析进行中"
     if pending_submit_after_close:
-        return "等待最新K线收盘"
+        return "等待最新K线收盘，收盘后将自动提交分析"
     if switching:
-        return "正在切换品种/周期"
+        return "正在切换品种/周期，请稍候"
     return None
 
 

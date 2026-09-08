@@ -171,6 +171,17 @@ def _direction_style(order_dir: str) -> tuple[str, str]:
 
 
 # ── 卡片构建 ──────────────────────────────────────────────────────────────────
+def _display_symbol(symbol: str) -> str:
+    """股票代码 → 「名称（代码）」；缓存里查不到（如 MT5/期货代码）原样返回。"""
+    try:
+        from pa_agent.data.symbol_search import symbol_name
+
+        name = symbol_name(symbol)
+    except Exception:  # noqa: BLE001 — 名称反查失败不应阻断推送
+        name = None
+    return f"{name}（{symbol}）" if name else str(symbol)
+
+
 def _build_card(
     decision_inner: dict,
     stage2_full: dict,
@@ -190,6 +201,7 @@ def _build_card(
     """
     dec = decision_inner or {}
     ncp: dict = stage2_full.get("next_cycle_prediction") or {}
+    sym = _display_symbol(symbol)
 
     order_type = _fmt(dec.get("order_type"))
     order_dir = _fmt(dec.get("order_direction"))
@@ -224,7 +236,7 @@ def _build_card(
         {
             "tag": "markdown",
             "content": (
-                f"**品种**：{symbol}　**周期**：{timeframe}\n"
+                f"**品种**：{sym}　**周期**：{timeframe}\n"
                 f"**下单类型**：{order_type}　**方向**：{dir_label}\n"
                 f"**入场价**：{entry}　**止损**：{stop}　**TP1**：{tp}　**TP2**：{tp2}\n"
                 f"**置信度**：{trade_conf}　**预估胜率**：{win_rate}"
@@ -264,7 +276,7 @@ def _build_card(
             {
                 "tag": "img",
                 "img_key": image_key,
-                "alt": {"tag": "plain_text", "content": f"K线图表 {symbol} {timeframe}"},
+                "alt": {"tag": "plain_text", "content": f"K线图表 {sym} {timeframe}"},
             }
         )
 
@@ -275,7 +287,7 @@ def _build_card(
         "header": {
             "title": {
                 "tag": "plain_text",
-                "content": f"🚨 PA Agent 下单信号 — {symbol} {timeframe}",
+                "content": f"🚨 PA Agent 下单信号 — {sym} {timeframe}",
             },
             "template": color,
             "padding": "12px 12px 12px 12px",

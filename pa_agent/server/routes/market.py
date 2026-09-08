@@ -45,7 +45,7 @@ def get_meta(request: Request) -> dict[str, Any]:
     general = getattr(settings, "general", None)
     kind = state.active_data_source_kind
     symbol = str(getattr(general, "last_symbol", "") or "")
-    timeframe = str(getattr(general, "last_timeframe", "15m") or "15m")
+    timeframe = str(getattr(general, "last_timeframe", "1d") or "1d")
 
     data_source = state.data_source()
     symbols: list[str] = []
@@ -203,7 +203,7 @@ def switch_data_source(request: Request, body: DataSourceSwitch) -> dict[str, An
         settings = state.settings()
         general = getattr(settings, "general", None)
         symbol = (body.symbol or getattr(general, "last_symbol", "") or "").strip()
-        timeframe = body.timeframe or getattr(general, "last_timeframe", "15m")
+        timeframe = body.timeframe or getattr(general, "last_timeframe", "1d")
         timeframe = dss.coerce_timeframe_for_kind(kind, timeframe)
         exchange = (body.exchange or getattr(general, "last_tradingview_exchange", "") or "")
         if kind == "tradingview":
@@ -468,7 +468,7 @@ def set_exchange(request: Request, body: dict) -> dict[str, Any]:
     data_source = state.data_source()
     dss.apply_tv_exchange(data_source, exchange)
     symbol = str(getattr(getattr(settings, "general", None), "last_symbol", "") or "").strip()
-    timeframe = str(getattr(getattr(settings, "general", None), "last_timeframe", "15m"))
+    timeframe = str(getattr(getattr(settings, "general", None), "last_timeframe", "1d"))
     if data_source is not None and getattr(data_source, "_connected", False):
         from pa_agent.server import market_service as market
 

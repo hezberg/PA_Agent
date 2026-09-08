@@ -30,7 +30,7 @@ def current_symbol(state: Any) -> str:
 
 def current_timeframe(state: Any) -> str:
     settings = state.settings()
-    return str(getattr(getattr(settings, "general", None), "last_timeframe", "15m") or "15m")
+    return str(getattr(getattr(settings, "general", None), "last_timeframe", "1d") or "1d")
 
 
 def bars_sufficient(state: Any, bars: list[Any], bar_count: int) -> bool:

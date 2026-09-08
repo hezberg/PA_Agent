@@ -21,7 +21,7 @@ def test_defaults(tmp_path):
     # 默认数据源为 MT5, 默认品种为现货黄金 XAUUSDm
     assert s.general.last_data_source == "easytdx"
     assert s.general.last_symbol == "XAUUSDm"
-    assert s.general.last_timeframe == "15m"
+    assert s.general.last_timeframe == "1d"
     assert s.general.decision_stance == "balanced"
     assert s.general.decision_flow_auto_play is True
     assert s.general.auto_resume_chart_after_analysis is False

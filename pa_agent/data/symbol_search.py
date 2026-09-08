@@ -1,4 +1,4 @@
-"""股票名称 → 代码反查（easytdx 数据源）。
+"""股票名称 → 代码反查（中文名/代码前缀 → 候选；任意数据来源的搜索框均可用）。
 
 数据源（决策 2026-09-06）：
 
@@ -233,6 +233,21 @@ def _load_ashare() -> list[tuple[str, str, str]]:
 
 def _load_hk() -> list[tuple[str, str, str]]:
     return _get_table("hk", _fetch_hk)
+
+
+def symbol_name(code: str) -> str | None:
+    """代码 → 中文名称（查按日缓存的名称表）；非 A 股/港股代码返回 None。
+
+    代码需与表内存储形式一致（A 股 6 位裸代码、港股 5 位、上证指数 sh 前缀）。
+    """
+    text = str(code or "").strip()
+    if not text:
+        return None
+    for table in (_load_ashare(), _load_hk()):
+        for c, name, _kind in table:
+            if c == text:
+                return name
+    return None
 
 
 def search_symbols(query: str, *, limit: int = 12) -> list[dict[str, str]]:

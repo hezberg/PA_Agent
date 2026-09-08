@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from pa_agent.server.state import AppState
@@ -51,7 +51,8 @@ def create_app(*, bootstrap: bool = True) -> FastAPI:
         return {"ok": True, "app": "pa-agent-web"}
 
     # SPA hosting: serve web/dist assets with an index.html fallback.
-    if _WEB_DIST.is_dir():
+    # dist 可能正被 vite 重建（目录短暂缺失），故逐项检查而非假设其完整。
+    if (_WEB_DIST / "assets").is_dir():
         app.mount(
             "/assets",
             StaticFiles(directory=_WEB_DIST / "assets"),
@@ -59,7 +60,7 @@ def create_app(*, bootstrap: bool = True) -> FastAPI:
         )
 
         @app.get("/{full_path:path}", include_in_schema=False)
-        def _spa(full_path: str) -> FileResponse:
+        def _spa(full_path: str) -> Response:
             candidate = (_WEB_DIST / full_path).resolve()
             if (
                 full_path
@@ -67,7 +68,10 @@ def create_app(*, bootstrap: bool = True) -> FastAPI:
                 and str(candidate).startswith(str(_WEB_DIST))
             ):
                 return FileResponse(candidate)
-            return FileResponse(_WEB_DIST / "index.html")
+            index = _WEB_DIST / "index.html"
+            if not index.is_file():
+                return Response("frontend is rebuilding, try again shortly", status_code=503)
+            return FileResponse(index)
 
     return app
 

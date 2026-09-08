@@ -14,6 +14,7 @@ import sys
 import threading
 import time
 import webbrowser
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -221,6 +222,11 @@ def main(argv: list[str] | None = None) -> int:
 
     import uvicorn
 
+    # reload 只监听 pa_agent 包：logs/、records/ 等运行期写文件不应触发重启。
+    reload_kwargs: dict[str, object] = {}
+    if args.reload:
+        reload_kwargs["reload_dirs"] = [str(Path(__file__).resolve().parent)]
+
     uvicorn.run(
         "pa_agent.server.app:create_app",
         host=args.host,
@@ -228,6 +234,10 @@ def main(argv: list[str] | None = None) -> int:
         factory=True,
         log_level="info",
         reload=args.reload,
+        # SSE 长连接会无限期挂起优雅关闭，导致 --reload / systemctl restart 卡死；
+        # 超时后强制断开，前端 EventSource 会自动重连。
+        timeout_graceful_shutdown=5,
+        **reload_kwargs,
     )
     return 0
 
