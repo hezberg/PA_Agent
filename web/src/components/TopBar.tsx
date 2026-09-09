@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
 import { useStore } from '../store'
 import { useSymbolName, tfZh } from '../symbolName'
+import { switchToSymbol } from '../switchSymbol'
 import { GearIcon } from '../icons'
 import type { Meta } from '../api/types'
 
@@ -94,52 +95,18 @@ export default function TopBar() {
     const sym = symOverride ?? symbol
     setBusy(true)
     try {
-      if (sym !== meta?.symbol || timeframe !== meta?.timeframe) {
-        const r = await api.post('/api/subscribe', { symbol: sym, timeframe })
-        if (!r.ok) {
-          if (Array.isArray(r.candidates) && r.candidates.length > 0) {
-            setCandidates(r.candidates)
-          } else {
-            setCandidates(null)
-            pushToast({ level: 'error', title: '切换失败', message: r.error ?? '' })
-          }
-          return // 保留输入内容与 dirty 状态，供用户修改后重试
-        }
-      }
+      symbolDirtyRef.current = true // 切换期间防 meta 轮询覆盖输入框
+      await switchToSymbol(sym, { timeframe })
       symbolDirtyRef.current = false
-      setCandidates(null)
-      const r = await api.post('/api/fetch')
-      if (!r.ok) pushToast({ level: 'error', title: '获取数据失败', message: r.error ?? '' })
     } finally {
       setBusy(false)
-      refetchMeta()
     }
   }
 
   async function onPickCandidate(code: string) {
     setSymbol(code)
     setCandidates(null)
-    if (kind !== 'easytdx') {
-      // A股/港股代码只有通达信源可订阅：选中候选时自动切换数据来源。
-      setBusy(true)
-      try {
-        let r = await api.post('/api/data-source', { kind: 'easytdx', symbol: code, timeframe })
-        for (let i = 0; !r.ok && /正在切换中/.test(r.error ?? '') && i < 3; i++) {
-          await new Promise((res) => setTimeout(res, 1500))
-          r = await api.post('/api/data-source', { kind: 'easytdx', symbol: code, timeframe })
-        }
-        if (!r.ok) {
-          pushToast({ level: 'error', title: '切换数据来源失败', message: r.error ?? '' })
-          return
-        }
-        setKind('easytdx')
-      } finally {
-        setBusy(false)
-        refetchMeta()
-      }
-      return
-    }
-    onFetchData(code)
+    await onFetchData(code)
   }
 
   async function onKindChange(next: string) {
@@ -360,6 +327,9 @@ export default function TopBar() {
             </button>
             <button className="menu-item" onClick={() => { setMenuOpen(false); openModal('feishu') }}>
               飞书通知设置<span className="menu-hint">Webhook 推送</span>
+            </button>
+            <button className="menu-item" onClick={() => { setMenuOpen(false); openModal('ths') }}>
+              自选股登录<span className="menu-hint">同花顺账号 · 左侧自选清单</span>
             </button>
             <div className="menu-sec">分 析</div>
             <button className={`menu-item${waitClose ? ' on' : ''}`} onClick={() => setWaitClose((v) => !v)}>

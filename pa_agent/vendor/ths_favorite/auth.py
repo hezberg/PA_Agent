@@ -1,0 +1,435 @@
+"""High-level helper for obtaining THS session cookies.
+
+Steps implemented here:
+1. Fetch the RSA public key from the auth endpoint.
+2. Perform the unified login request to obtain ``userid`` and ``sessionid``.
+3. Call ``mainverify`` to retrieve the ``signvalid`` field.
+4. Exchange the trio for cookies via ``docookie2.php``.
+
+Dependencies: ``requests`` and ``cryptography``. Install with
+``pip install requests cryptography`` if they are not already available.
+"""
+
+import base64
+import hashlib
+import json
+import time
+import xml.etree.ElementTree as ET
+from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Any
+
+import requests
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import padding
+
+from .config import COOKIE_CACHE_FILE, COOKIE_CACHE_TTL_SECONDS
+from .cookie import parse_cookie_header, parse_cookie_string
+from .exceptions import THSAPIError, THSNetworkError
+from .storage import (
+    load_cookie_cache_data,
+    read_cached_auth_params,
+    read_cached_cookies,
+    write_cookie_cache,
+)
+from .utils import parse_ths_xml_response
+
+AUTH_BASE = 'https://auth.10jqka.com.cn'
+UPASS_BASE = 'https://upass.10jqka.com.cn'
+DOC_COOKIE_PATH = '/docookie2.php'
+USER_AGENT = '同花顺/7.0.10 CFNetwork/1333.0.4 Darwin/21.5.0'
+IMEI_ENCODED = 'ZjI6MDY6NGE6NzI6MjQ6NTA='
+QSID = '8003'  # 设备类型标识，抓包得到的移动端取值
+PRODUCT = 'S01'  # 代表同花顺客户端渠道
+SECURITIES = r'%E5%90%8C%E8%8A%B1%E9%A1%BA%E8%BF%9C%E8%88%AA%E7%89%88'  # URL 编码后的产品名称
+RSA_VERSION_FALLBACK = 'default_5'
+TA_APP_ID = '2022021114090152'
+REQUEST_TIMEOUT = 10.0
+
+
+@dataclass(frozen=True)
+class SessionResult:
+    userid: str
+    sessionid: str
+    signvalid: str
+    cookies: dict[str, str]
+
+
+@dataclass(frozen=True)
+class LoginBundle:
+    userid: str
+    sessionid: str
+    account: str
+    rsa_version: str
+
+
+@dataclass(frozen=True)
+class RsaInfo:
+    pubkey: str
+    rsa_version: str
+
+
+class SessionClient:
+    def __init__(
+        self,
+        username: str,
+        password: str,
+        *,
+        auth_base: str = AUTH_BASE,
+        upass_base: str = UPASS_BASE,
+        timeout: float = REQUEST_TIMEOUT,
+        http: requests.Session | None = None,
+    ) -> None:
+        if not username or not password:
+            raise ValueError('username/password are required; anonymous login is not supported')
+
+        self._username = username
+        self._password = password
+        self._auth_base = auth_base.rstrip('/')
+        self._upass_base = upass_base.rstrip('/')
+        self._timeout = timeout
+        self._http = http or requests.Session()
+        self._http.headers.setdefault('User-Agent', USER_AGENT)
+
+    def create_session(self) -> SessionResult:
+        rsa_info = self._fetch_rsa_info()
+        login_bundle = self._login(rsa_info)
+        signvalid = self._fetch_signvalid(login_bundle)
+        cookies = self._fetch_cookies(login_bundle.userid, login_bundle.sessionid, signvalid)
+        return SessionResult(
+            userid=login_bundle.userid,
+            sessionid=login_bundle.sessionid,
+            signvalid=signvalid,
+            cookies=cookies,
+        )
+
+    def _fetch_rsa_info(self) -> RsaInfo:
+        params = {'reqtype': 'do_rsa', 'type': 'get_pubkey'}
+        root = self._call_xml(f'{self._auth_base}/verify2', params, 'RSA key fetch')
+        item = root.find('item')
+        if item is None:
+            raise RuntimeError('RSA key fetch failed: <item> node missing')
+        pubkey = item.attrib.get('pubkey')
+        if not pubkey:
+            raise RuntimeError('RSA key fetch failed: missing pubkey attribute')
+        rsa_version = item.attrib.get('rsa_version', RSA_VERSION_FALLBACK)
+        return RsaInfo(pubkey=pubkey, rsa_version=rsa_version)
+
+    def _login(self, rsa_info: RsaInfo) -> LoginBundle:
+        encrypted_account = self._encrypt_with_rsa(rsa_info.pubkey, self._username)
+        encrypted_password = self._encrypt_with_rsa(rsa_info.pubkey, self._password)
+        params = {
+            'account': encrypted_account,
+            'msg': '1',
+            'passwd': encrypted_password,
+            'reqtype': 'unified_login',
+            'rsa_version': rsa_info.rsa_version or RSA_VERSION_FALLBACK,
+            'ta_appid': TA_APP_ID,
+        }
+        root = self._call_xml(f'{self._auth_base}/verify2', params, 'Login')
+        item = root.find('item')
+        if item is None:
+            raise RuntimeError('Login response missing <item> node')
+        userid = item.attrib.get('userid')
+        sessionid = item.attrib.get('sessionid')
+        account = item.attrib.get('account')
+        if not all([userid, sessionid, account]):
+            raise RuntimeError(
+                'Login response missing required attributes (userid/sessionid/account)'
+            )
+        rsa_version = item.attrib.get('rsa_version') or rsa_info.rsa_version or RSA_VERSION_FALLBACK
+        return LoginBundle(
+            userid=userid,
+            sessionid=sessionid,
+            account=account,
+            rsa_version=rsa_version,
+        )
+
+    def _fetch_signvalid(self, login_bundle: LoginBundle) -> str:
+        params = {
+            'reqtype': 'mainverify',
+            'userid': login_bundle.userid,
+            'sessionid': login_bundle.sessionid,
+            'qsid': QSID,
+            'product': PRODUCT,
+            'version': '11.4.1.3',
+            'imei': IMEI_ENCODED,
+            'sdsn': '',
+            'rsa_version': login_bundle.rsa_version or RSA_VERSION_FALLBACK,
+            'nohqlist': '0',
+            'securities': SECURITIES,
+        }
+        root = self._call_xml(f'{self._auth_base}/verify2', params, 'Mainverify')
+        item = root.find('item')
+        if item is None:
+            raise RuntimeError('Mainverify response missing <item> node')
+        passport_blob = item.attrib.get('passport')
+        if not passport_blob:
+            raise RuntimeError('Mainverify response missing passport data')
+        passport_map = self._parse_passport(passport_blob)
+        signvalid = passport_map.get('signvalid')
+        if not signvalid:
+            raise RuntimeError('signvalid not present inside passport payload')
+        return signvalid
+
+    def _fetch_cookies(self, userid: str, sessionid: str, signvalid: str) -> dict[str, str]:
+        params = {'userid': userid, 'sessionid': sessionid, 'signvalid': signvalid}
+        resp = self._http.get(
+            f'{self._upass_base}{DOC_COOKIE_PATH}', params=params, timeout=self._timeout
+        )
+        resp.raise_for_status()
+        cookies = resp.cookies.get_dict()
+        if not cookies:
+            cookie_header = resp.headers.get('Set-Cookie', '')
+            if cookie_header:
+                cookies = parse_cookie_header(cookie_header)
+        if not cookies:
+            raise RuntimeError('docookie2.php returned no cookies')
+        return cookies
+
+    def _call_xml(self, url: str, params: dict[str, str], action: str) -> ET.Element:
+        try:
+            resp = self._http.get(url, params=params, timeout=self._timeout)
+            resp.raise_for_status()
+        except requests.RequestException as exc:
+            raise THSNetworkError(action, str(exc)) from exc
+        return parse_ths_xml_response(resp.text, action)
+
+    @staticmethod
+    def _encrypt_with_rsa(pubkey_pem: str, value: str) -> str:
+        public_key = serialization.load_pem_public_key(pubkey_pem.encode('ascii'))
+        encrypted = public_key.encrypt(value.encode('utf-8'), padding.PKCS1v15())
+        return base64.b64encode(encrypted).decode('ascii')
+
+    @staticmethod
+    def _parse_passport(passport_blob: str) -> dict[str, str]:
+        out: dict[str, str] = {}
+        for chunk in passport_blob.split('|'):
+            if not chunk or '=' not in chunk:
+                continue
+            key, value = chunk.split('=', 1)
+            out[key.strip()] = value.strip()
+        return out
+
+
+class SessionManager:
+    """Provide unified cookie resolution across login strategies."""
+
+    def __init__(
+        self,
+        *,
+        cookies: dict[str, str] | str | None = None,
+        username: str | None = None,
+        password: str | None = None,
+        cookie_cache_path: str | None = None,
+        cookie_cache_ttl_seconds: int = COOKIE_CACHE_TTL_SECONDS,
+        login_factory: Callable[[str, str], SessionResult] | None = None,
+    ) -> None:
+        self._explicit_cookies = self._normalize_cookies(cookies)
+        self._username = username
+        self._password = password
+        self._cookie_cache_path = cookie_cache_path or COOKIE_CACHE_FILE
+        self._cookie_cache_ttl = cookie_cache_ttl_seconds
+        self._login_factory = login_factory or create_session
+        self._resolved_cache: dict[str, str] | None = None
+        self._last_session_result: SessionResult | None = None
+
+    def resolve(self) -> dict[str, str] | None:
+        if self._explicit_cookies is not None:
+            return self._explicit_cookies.copy()
+        if self._resolved_cache is None:
+            self._resolved_cache = self._resolve_from_inputs()
+        return self._resolved_cache.copy() if self._resolved_cache else None
+
+    def get_auth_params(self) -> dict[str, str]:
+        sr = self._last_session_result
+        if sr:
+            expires = datetime.fromtimestamp(time.time() + 86400).strftime('%Y-%m-%d %H:%M:%S')
+            return {
+                'userid': sr.userid,
+                'sessionid': sr.sessionid,
+                'expires': expires,
+            }
+
+        if self._username:
+            key = self._credentials_cache_key(self._username)
+            cached = read_cached_auth_params(self._cookie_cache_path, key, self._cookie_cache_ttl)
+            if cached:
+                return cached
+
+        cache_data = load_cookie_cache_data(self._cookie_cache_path)
+        latest_cached: dict[str, str] | None = None
+        latest_ts = 0.0
+        for cache_key, entry in cache_data.items():
+            if not cache_key.startswith('credentials::'):
+                continue
+            ts = entry.get('timestamp', 0)
+            try:
+                ts_value = float(ts)
+            except (TypeError, ValueError):
+                continue
+            if time.time() - ts_value > self._cookie_cache_ttl:
+                continue
+            ap = entry.get('auth_params')
+            if isinstance(ap, dict) and ap and ts_value > latest_ts:
+                latest_ts = ts_value
+                latest_cached = {str(k): str(v) for k, v in ap.items()}
+        if latest_cached:
+            return latest_cached
+
+        return self._extract_sessionid_from_cookies(cache_data)
+
+    def _extract_sessionid_from_cookies(self, cache_data: dict[str, Any]) -> dict[str, str]:
+        from blockstock import extract_auth_params_from_cookies
+
+        for _k, entry in cache_data.items():
+            cookies = entry.get('cookies', {}) if isinstance(entry, dict) else {}
+            userid = str(cookies.get('userid', ''))
+            if not userid:
+                continue
+            result = extract_auth_params_from_cookies(cookies)
+            if not result.get('userid'):
+                continue
+            return result
+
+        raise THSAPIError('认证', 'multiStorage 需要有效的登录凭据，请先登录')
+
+    def _resolve_from_inputs(self) -> dict[str, str] | None:
+        if self._username is None and self._password is None:
+            return self._read_latest_cached_cookies('credentials::')
+        return self._resolve_credentials_flow()
+
+    def _resolve_credentials_flow(self) -> dict[str, str] | None:
+        if self._username and self._password:
+            cache_key = self._credentials_cache_key(self._username)
+            return self._fetch_with_cache(
+                cache_key,
+                lambda: self._load_from_credentials(self._username, self._password),
+            )
+
+        if self._username:
+            cache_key = self._credentials_cache_key(self._username)
+            cached = read_cached_cookies(
+                self._cookie_cache_path,
+                cache_key,
+                self._cookie_cache_ttl,
+            )
+            if cached:
+                return cached
+            raise THSAPIError(
+                '认证',
+                f"未找到用户 '{self._username}' 的凭据缓存，请同时提供密码 (--password)。",
+            )
+
+        raise THSAPIError(
+            '认证',
+            '使用账号密码登录时需要同时提供 username 和 password。',
+        )
+
+    def _fetch_with_cache(
+        self,
+        cache_key: str,
+        loader: Callable[[], dict[str, str] | None],
+    ) -> dict[str, str] | None:
+        cached = read_cached_cookies(self._cookie_cache_path, cache_key, self._cookie_cache_ttl)
+        if cached:
+            return cached
+        fresh = loader()
+        if fresh:
+            write_cookie_cache(self._cookie_cache_path, cache_key, fresh)
+        return fresh
+
+    def _load_from_credentials(self, username: str, password: str) -> dict[str, str] | None:
+        cache_key = self._credentials_cache_key(username)
+        session = self._login_factory(username, password)
+        self._last_session_result = session
+        expires = datetime.fromtimestamp(time.time() + 86400).strftime('%Y-%m-%d %H:%M:%S')
+        auth_params = {
+            'userid': session.userid,
+            'sessionid': session.sessionid,
+            'expires': expires,
+        }
+        write_cookie_cache(
+            self._cookie_cache_path,
+            cache_key,
+            session.cookies,
+            extra_fields={'auth_params': auth_params},
+        )
+        return session.cookies
+
+    def _read_latest_cached_cookies(self, cache_key_prefix: str) -> dict[str, str] | None:
+        cache_data = load_cookie_cache_data(self._cookie_cache_path)
+        latest_timestamp: float | None = None
+        latest_cookies: dict[str, str] | None = None
+
+        for cache_key, entry in cache_data.items():
+            if not cache_key.startswith(cache_key_prefix) or not isinstance(entry, dict):
+                continue
+
+            timestamp = entry.get('timestamp')
+            try:
+                timestamp_value = float(timestamp)
+            except (TypeError, ValueError):
+                continue
+
+            if time.time() - timestamp_value > self._cookie_cache_ttl:
+                continue
+
+            cookies_payload = entry.get('cookies')
+            if not isinstance(cookies_payload, dict) or not cookies_payload:
+                continue
+
+            if latest_timestamp is None or timestamp_value > latest_timestamp:
+                latest_timestamp = timestamp_value
+                latest_cookies = {str(k): str(v) for k, v in cookies_payload.items()}
+
+        return latest_cookies
+
+    @staticmethod
+    def _credentials_cache_key(username: str) -> str:
+        digest = hashlib.sha256(username.encode('utf-8')).hexdigest()
+        return f'credentials::{digest}'
+
+    @staticmethod
+    def _normalize_cookies(cookies_input: dict[str, str] | str | None) -> dict[str, str] | None:
+        if cookies_input is None:
+            return None
+        if isinstance(cookies_input, dict):
+            return {str(k): str(v) for k, v in cookies_input.items()}
+        if isinstance(cookies_input, str):
+            return parse_cookie_string(cookies_input)
+        raise TypeError('cookies 必须是字典或字符串')
+
+
+def create_session(username: str, password: str) -> SessionResult:
+    """Convenience wrapper that returns ``SessionResult`` for the given credentials."""
+    client = SessionClient(username=username, password=password)
+    return client.create_session()
+
+
+def main() -> None:
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Fetch THS session cookies')
+    parser.add_argument('username', help='账号')
+    parser.add_argument('password', help='密码')
+    args = parser.parse_args()
+
+    session_result = create_session(args.username, args.password)
+    print(
+        json.dumps(
+            {
+                'userid': session_result.userid,
+                'sessionid': session_result.sessionid,
+                'signvalid': session_result.signvalid,
+                'cookies': session_result.cookies,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+
+
+if __name__ == '__main__':
+    main()

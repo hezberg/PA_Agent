@@ -25,6 +25,7 @@ class SettingsUpdate(BaseModel):
     feishu: dict[str, Any] | None = None
     pushplus: dict[str, Any] | None = None
     tushare: dict[str, Any] | None = None
+    ths: dict[str, Any] | None = None
 
 
 class FeishuTestBody(BaseModel):
@@ -55,6 +56,10 @@ def get_settings(request: Request) -> dict[str, Any]:
         getattr(settings.provider, "api_key", "")
         or getattr(settings.provider, "api_key_encrypted", "")
     )
+    ths = payload.get("ths") or {}
+    if ths.get("password"):
+        ths["password"] = _MASK  # never echo the real password
+    ths["password_configured"] = bool(getattr(settings.ths, "password", ""))
     return {"ok": True, "settings": payload}
 
 
@@ -78,6 +83,11 @@ def put_settings(request: Request, body: SettingsUpdate) -> dict[str, Any]:
             values.pop("api_key_masked", None)
             if not str(values.get("api_key") or "").strip():
                 values.pop("api_key", None)
+        if section == "ths":
+            values.pop("password_configured", None)
+            # 掩码/空密码表示「保留原值」，避免回显值覆盖真实密码
+            if str(values.get("password") or "").strip() in ("", _MASK):
+                values.pop("password", None)
         cleaned = {k: v for k, v in values.items() if k in current.model_fields}
         if cleaned:
             setattr(settings, section, current.model_copy(update=cleaned))

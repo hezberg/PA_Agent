@@ -90,6 +90,7 @@ def get_meta(request: Request) -> dict[str, Any]:
         ),
         "refresh_running": state.refresh_loop is not None,
         "analysis_bar_count": int(getattr(general, "analysis_bar_count", 100)),
+        "ths_enabled": bool(getattr(settings, "ths", None) is not None and settings.ths.enabled),
         "ai_mode_label": _ai_mode_label(settings),
         "api_key_configured": provider_api_key_configured(settings),
     }

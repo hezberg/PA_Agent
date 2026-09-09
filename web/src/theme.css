@@ -404,6 +404,85 @@ input[type='checkbox'] { accent-color: var(--accent); }
 .rail .rail-txt { writing-mode: vertical-rl; letter-spacing: 4px; font-size: 12px; }
 .rail:hover { color: var(--accent); background: var(--surface-2); }
 
+/* ── 自选清单（最左列，固定宽度，可收起成竖轨） ─────────────────────────── */
+.watchlist {
+  width: 200px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--surface-1);
+  border-right: 1px solid var(--line);
+}
+.watchlist-rail { width: 34px; }
+.wl-head {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+}
+.wl-title { font-weight: 700; font-size: 12px; letter-spacing: 2px; }
+.wl-act {
+  border: none;
+  background: transparent;
+  color: var(--fg-2);
+  padding: 2px 5px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.wl-act:hover:not(:disabled) { background: var(--surface-3); color: var(--fg); }
+.wl-guide { padding: 14px 12px; display: flex; flex-direction: column; gap: 10px; color: var(--fg-2); font-size: 12px; }
+.wl-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+}
+.wl-tab {
+  border: none;
+  background: transparent;
+  color: var(--fg-2);
+  padding: 2px 8px;
+  border-radius: 9px;
+  font-size: 11px;
+  cursor: pointer;
+  max-width: 88px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wl-tab:hover { color: var(--fg); background: var(--surface-3); }
+.wl-tab.on { background: var(--surface-3); color: var(--accent); font-weight: 600; }
+.wl-stale { padding: 4px 10px; font-size: 10.5px; color: var(--warning); }
+.wl-items { flex: 1; overflow-y: auto; min-height: 0; padding: 4px 0; }
+.wl-item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  padding: 5px 10px;
+  cursor: pointer;
+  border-left: 2px solid transparent;
+}
+.wl-item:hover { background: var(--surface-2); }
+.wl-item.cur { background: var(--surface-2); border-left-color: var(--accent); }
+.wl-item.cur .wl-name { color: var(--accent); }
+.wl-name {
+  font-size: 12px;
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.wl-code { font-family: var(--font-mono); font-size: 10.5px; color: var(--fg-3); }
+.wl-empty { padding: 12px; color: var(--fg-3); font-size: 12px; }
+
 .chart-area {
   flex: 3;
   min-width: 0;

@@ -1,0 +1,190 @@
+import atexit
+import json
+from typing import Any, TypeVar
+
+from loguru import logger
+from requests import Response, Session
+from requests.exceptions import HTTPError, RequestException
+
+from .config import DEFAULT_HEADERS, DEFAULT_HTTP_TIMEOUT
+from .cookie import parse_cookie_string
+from .exceptions import THSNetworkError
+
+TApiClient = TypeVar('TApiClient', bound='ApiClient')
+
+# Shared session for protocol-level requests (connection pooling, no cookie state).
+# Each call still passes explicit cookies= — this session only provides TCP reuse.
+SHARED_SESSION = Session()
+atexit.register(SHARED_SESSION.close)
+
+
+class ApiClient:
+    """负责底层 HTTP 请求、Cookie 管理与通用错误处理的客户端。"""
+
+    def __init__(
+        self,
+        base_url: str,
+        cookies: str | dict[str, str] | None = None,
+        headers: dict[str, str] | None = None,
+        client: Session | None = None,
+        timeout: float = DEFAULT_HTTP_TIMEOUT,
+    ) -> None:
+        self.base_url: str = base_url.rstrip('/')
+        logger.debug("ApiClient 初始化: base_url='{}', timeout={}s", self.base_url, timeout)
+
+        self._timeout: float = timeout
+
+        if client:
+            self._client = client
+            self._is_external_client = True
+            logger.info('使用外部传入的 requests.Session 实例。')
+        else:
+            self._client = Session()
+            self._is_external_client = False
+            logger.info('创建内部 requests.Session 实例。')
+
+        if cookies:
+            self.set_cookies(cookies)
+
+        self._default_headers: dict[str, str] = (
+            headers.copy() if headers else DEFAULT_HEADERS.copy()
+        )
+        logger.debug('默认请求头已设置: {}', self._default_headers)
+
+    def set_cookies(self, cookies_input: str | dict[str, str]) -> None:
+        if isinstance(cookies_input, str):
+            parsed = parse_cookie_string(cookies_input)
+        elif isinstance(cookies_input, dict):
+            parsed = {str(k): str(v) for k, v in cookies_input.items()}
+        else:
+            logger.error(
+                '设置cookies失败: cookies_input 类型错误，应为字符串或字典，得到 %s。',
+                type(cookies_input),
+            )
+            raise TypeError('cookies_input 参数必须是字符串或字典类型。')
+
+        self._client.cookies.clear()
+        self._client.cookies.update(parsed)
+        logger.info('客户端 cookies 已更新，共 {} 个。', len(parsed))
+
+    def get_cookies(self) -> dict[str, str]:
+        cookies = self._client.cookies.get_dict()
+        logger.debug('获取当前 cookies 副本，共 {} 个。', len(cookies))
+        return cookies
+
+    def _prepare_headers(self, additional_headers: dict[str, str] | None = None) -> dict[str, str]:
+        final_headers: dict[str, str] = self._default_headers.copy()
+        if additional_headers:
+            final_headers.update(additional_headers)
+        logger.debug('准备请求头: {}', final_headers)
+        return final_headers
+
+    def request(
+        self,
+        method: str,
+        endpoint: str,
+        params: dict[str, Any] | None = None,
+        data: dict[str, Any] | None = None,
+        json_payload: Any | None = None,
+        headers: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
+        full_url: str = f"{self.base_url}/{endpoint.lstrip('/')}"
+        request_headers = self._prepare_headers(headers)
+
+        logger.info('发送 {} 请求到 {}', method, full_url)
+        logger.debug(
+            '请求参数: {}, 表单数据: {}, JSON载荷: {}', params, data, json_payload is not None
+        )
+
+        response: Response | None = None
+        action = f'{method.upper()} {full_url}'
+        try:
+            response = self._client.request(
+                method=method,
+                url=full_url,
+                params=params,
+                data=data,
+                json=json_payload,
+                headers=request_headers,
+                timeout=self._timeout,
+            )
+            logger.debug('收到响应: 状态码 {}, URL: {}', response.status_code, response.url)
+            response.raise_for_status()
+
+            if not response.text:
+                logger.info('请求 {} 成功，但响应体为空。返回空字典。', full_url)
+                return {}
+
+            json_response = response.json()
+            logger.debug('成功解析响应为JSON: {}', str(json_response)[:200])
+            return json_response
+        except HTTPError as exc:
+            status_code = exc.response.status_code if exc.response else '未知'
+            resp_preview = exc.response.text[:200] if exc.response and exc.response.text else ''
+            logger.error(
+                'HTTP错误 ({} {}): 状态码 {}, 响应: {}...',
+                method,
+                full_url,
+                status_code,
+                resp_preview,
+            )
+            raise THSNetworkError(action, f'HTTP {status_code}: {resp_preview}') from exc
+        except RequestException as exc:
+            logger.error('请求错误 ({} {}): {}', method, full_url, exc)
+            raise THSNetworkError(action, str(exc)) from exc
+        except (json.JSONDecodeError, ValueError) as exc:
+            resp_text_preview = ''
+            if response is not None and response.text:
+                resp_text_preview = response.text[:200]
+            logger.error(
+                'JSON解码错误 ({} {}): {}. 响应文本: {}...',
+                method,
+                full_url,
+                exc,
+                resp_text_preview,
+            )
+            raise THSNetworkError(action, f'响应非 JSON: {exc}') from exc
+
+    def get(
+        self, endpoint: str, params: dict[str, Any] | None = None, **kwargs: Any
+    ) -> dict[str, Any]:
+        return self.request('GET', endpoint, params=params, **kwargs)
+
+    def post_form_urlencoded(
+        self, endpoint: str, data: dict[str, Any] | None = None, **kwargs: Any
+    ) -> dict[str, Any]:
+        custom_headers: dict[str, str] = kwargs.pop('headers', {})
+        if 'Content-Type' not in custom_headers and 'content-type' not in custom_headers:
+            custom_headers['Content-Type'] = 'application/x-www-form-urlencoded; charset=utf-8'
+        return self.request('POST', endpoint, data=data, headers=custom_headers, **kwargs)
+
+    def post_form_json(
+        self, endpoint: str, data: dict[str, Any] | None = None, **kwargs: Any
+    ) -> dict[str, Any]:
+        custom_headers: dict[str, str] = kwargs.pop('headers', {})
+        if 'Content-Type' not in custom_headers and 'content-type' not in custom_headers:
+            custom_headers['Content-Type'] = 'application/json; charset=utf-8'
+        return self.request('POST', endpoint, json_payload=data, headers=custom_headers, **kwargs)
+
+    def post_json(
+        self, endpoint: str, json_payload: Any | None = None, **kwargs: Any
+    ) -> dict[str, Any]:
+        return self.request('POST', endpoint, json_payload=json_payload, **kwargs)
+
+    def close(self) -> None:
+        if not self._is_external_client:
+            self._client.close()
+            logger.info('内部 ApiClient 的 requests.Session 已关闭。')
+        else:
+            logger.debug('ApiClient 使用的是外部 Session，不在此处关闭。')
+
+    def __enter__(self: TApiClient) -> TApiClient:
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: Any | None,
+    ) -> None:
+        self.close()

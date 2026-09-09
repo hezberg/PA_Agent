@@ -60,8 +60,11 @@ interface Store {
 
   // toasts / modals
   toasts: ToastItem[]
-  modal: 'ai' | 'general' | 'feishu' | 'validation' | null
+  modal: 'ai' | 'general' | 'feishu' | 'ths' | 'validation' | null
   validationBody: { title: string; summary: string; body: string } | null
+
+  // K 线展开状态（自选清单点击切票时需要跨组件展开）
+  chartOpen: boolean
 
   // actions
   setMeta: (m: Meta) => void
@@ -90,6 +93,8 @@ interface Store {
   dismissToast: (id: number) => void
   openModal: (m: Store['modal']) => void
   showValidation: (v: { title: string; summary: string; body: string }) => void
+  toggleChart: () => void
+  setChartOpen: (v: boolean) => void
 }
 
 let toastSeq = 1
@@ -127,6 +132,9 @@ export const useStore = create<Store>((set) => ({
   toasts: [],
   modal: null,
   validationBody: null,
+  chartOpen:
+    typeof window !== 'undefined' &&
+    (window.location.hash === '#chart' || localStorage.getItem('pa.chart.open') === '1'),
 
   setMeta: (m) => set({ meta: m }),
   applyUiState: (u) =>
@@ -242,6 +250,16 @@ export const useStore = create<Store>((set) => ({
   dismissToast: (id) =>
     set((s) => ({ toasts: s.toasts.filter((x) => x.id !== id) })),
   openModal: (m) => set({ modal: m }),
+  toggleChart: () =>
+    set((s) => {
+      const v = !s.chartOpen
+      localStorage.setItem('pa.chart.open', v ? '1' : '0')
+      return { chartOpen: v }
+    }),
+  setChartOpen: (v) => {
+    localStorage.setItem('pa.chart.open', v ? '1' : '0')
+    set({ chartOpen: v })
+  },
   showValidation: (v) => set({ validationBody: v, modal: 'validation' }),
 }))
 

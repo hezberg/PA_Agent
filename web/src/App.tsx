@@ -1,17 +1,16 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { api, openStream } from './api/client'
 import { useStore } from './store'
 import TopBar from './components/TopBar'
 import FlowBar from './components/FlowBar'
 import ChartPanel from './components/ChartPanel'
+import WatchlistPanel from './components/WatchlistPanel'
 import Sidebar from './components/Sidebar'
 import StatusBar from './components/StatusBar'
 import Toasts from './components/Toasts'
 import SettingsModals from './components/SettingsModals'
 import { CandleIcon } from './icons'
 import type { DecisionPanelPayload, FramePayload, Meta, UiState } from './api/types'
-
-const CHART_OPEN_KEY = 'pa.chart.open'
 
 /** Beep via WebAudio (order-opportunity alert; replaces Qt QApplication.beep). */
 function beep() {
@@ -32,20 +31,10 @@ function beep() {
 }
 
 export default function App() {
-  const store = useStore()
   const analysisCloser = useRef<null | (() => void)>(null)
   const demoCloser = useRef<null | (() => void)>(null)
-
-  // K 线展开状态：默认收起（工作场景低调），用户选择在本机记住；#chart 深链直达展开态。
-  const [chartOpen, setChartOpen] = useState(() =>
-    window.location.hash === '#chart' || localStorage.getItem(CHART_OPEN_KEY) === '1',
-  )
-  function toggleChart() {
-    setChartOpen((v) => {
-      localStorage.setItem(CHART_OPEN_KEY, v ? '0' : '1')
-      return !v
-    })
-  }
+  const chartOpen = useStore((s) => s.chartOpen)
+  const toggleChart = useStore((s) => s.toggleChart)
 
   useEffect(() => {
     // ── Bootstrap static + dynamic meta ────────────────────────────────────
@@ -190,6 +179,7 @@ export default function App() {
       <TopBar />
       <FlowBar />
       <div className="workbench">
+        <WatchlistPanel />
         {!chartOpen && (
           <button className="rail" title="展开 K 线图" onClick={toggleChart}>
             <CandleIcon />

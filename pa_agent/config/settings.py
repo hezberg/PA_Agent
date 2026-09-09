@@ -141,6 +141,16 @@ class FeishuSettings(BaseModel):
     notify_on_order_only: bool = True
 
 
+class THSSettings(BaseModel):
+    """同花顺自选股账号（persisted in ignored settings.json；密码与 API Key 同级敏感）。"""
+    model_config = ConfigDict(extra="ignore")
+
+    #: 已登录（凭据有效且至少成功拉过一次自选）
+    enabled: bool = False
+    username: str = ""
+    password: str = ""
+
+
 class TushareSettings(BaseModel):
     """Tushare Pro data source settings (persisted in ignored settings.json)."""
     model_config = ConfigDict(extra="ignore")
@@ -167,6 +177,7 @@ class Settings(BaseModel):
     feishu: FeishuSettings = Field(default_factory=FeishuSettings)
     pushplus: PushPlusSettings = Field(default_factory=PushPlusSettings)
     tushare: TushareSettings = Field(default_factory=TushareSettings)
+    ths: THSSettings = Field(default_factory=THSSettings)
 
 
 def provider_api_key_configured(settings: Settings | None) -> bool:

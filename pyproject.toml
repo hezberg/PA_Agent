@@ -7,7 +7,7 @@ name = "pa-agent"
 version = "0.1.0"
 description = "Price Action AI assistant: MT5 kline data, two-stage LLM analysis (AGPL-3.0)"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.14"
 license = { text = "AGPL-3.0-or-later" }
 authors = [{ name = "PA Agent Team" }]
 dependencies = [
@@ -31,7 +31,12 @@ dependencies = [
     "fastapi>=0.110",
     "uvicorn>=0.29",
     "requests>=2.31",
-    "easy-tdx>=1.32,<2",
+    # easy-tdx 已从 PyPI 注册表下架（simple index 404），钉住原 wheel 直链保持可解析；
+    # 文件仍由 files.pythonhosted.org 提供。升级需作者重新上架后改回 "easy-tdx>=1.32,<2"。
+    "easy-tdx @ https://files.pythonhosted.org/packages/d3/c0/1eff2749bcacd44ac2fabcca414e1c86e367e58d10a133c3a0c723dd0155/easy_tdx-1.32.4-py3-none-any.whl",
+    # vendored ths-favorite（同花顺自选）所需
+    "protobuf>=5",
+    "loguru>=0.7",
 ]
 
 [project.optional-dependencies]

@@ -41,6 +41,7 @@ export interface Meta {
   analysis_bar_count: number
   ai_mode_label: string
   api_key_configured: boolean
+  ths_enabled?: boolean
 }
 
 export interface WaitCloseState {
@@ -156,4 +157,13 @@ export interface SettingsPayload {
   feishu: Record<string, unknown>
   pushplus: Record<string, unknown>
   tushare: Record<string, unknown>
+  ths: Record<string, unknown>
 }
+
+export interface ThsGroup {
+  id: string
+  name: string
+  readonly?: boolean
+  items: { code: string; market: string; sub_code: string; name: string }[]
+}
+

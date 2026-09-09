@@ -68,6 +68,7 @@ export default function SettingsModals() {
   if (modal === 'ai') return <AiModelModal settings={settings} onClose={close} />
   if (modal === 'general') return <GeneralModal settings={settings} onClose={close} />
   if (modal === 'feishu') return <FeishuModal settings={settings} onClose={close} />
+  if (modal === 'ths') return <ThsModal settings={settings} onClose={close} />
   return null
 }
 
@@ -343,6 +344,86 @@ function FeishuModal({ settings, onClose }: { settings: SettingsPayload; onClose
   )
 }
 
+function ThsModal({ settings, onClose }: { settings: SettingsPayload; onClose: () => void }) {
+  const ths = settings.ths as Record<string, unknown>
+  const [username, setUsername] = useState(String(ths.username ?? ''))
+  const [password, setPassword] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState('')
+  const [error, setError] = useState('')
+  const enabled = Boolean(ths.enabled)
+  const passwordConfigured = Boolean(ths.password_configured)
+
+  async function doLogin() {
+    setBusy(true); setError(''); setMsg('')
+    const r = await api.post('/api/ths/login', { username, password })
+    setBusy(false)
+    if (r.ok) {
+      setMsg(`登录成功：${r.username}，左侧自选清单即将显示`)
+      useStore.getState().pushToast({ level: 'success', title: '同花顺登录成功', message: '' })
+      setTimeout(onClose, 800)
+    } else {
+      setError(r.error ?? '登录失败')
+    }
+  }
+
+  async function doLogout() {
+    setBusy(true); setError(''); setMsg('')
+    await api.post('/api/ths/logout')
+    setBusy(false)
+    setMsg('已退出登录，凭据与本地会话已清除')
+    setUsername(''); setPassword('')
+  }
+
+  return (
+    <Modal title="自选股登录（同花顺）" onClose={onClose} onSave={null} error={error} info={msg}>
+      <div className="form-row">
+        <label>当前状态</label>
+        <span className="kv-value">
+          {enabled
+            ? `已登录：${username || String(ths.username ?? '')}`
+            : passwordConfigured
+              ? '已保存账号但未登录成功'
+              : '未登录'}
+        </span>
+      </div>
+      <div className="form-row">
+        <label>账号</label>
+        <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="手机号 / 用户名" />
+      </div>
+      <div className="form-row">
+        <label>密码</label>
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder={passwordConfigured ? '已保存（输入新密码可覆盖）' : '同花顺账号密码'}
+        />
+      </div>
+      <div className="form-row">
+        <label />
+        <span className="form-hint" style={{ marginLeft: 0 }}>
+          密码保存在本机 settings.json（gitignore），仅用于会话过期后自动重登。
+          若同花顺要求验证码会登录失败——在手机 App 上保持常用设备可降低风控概率。
+        </span>
+      </div>
+      <div className="form-row">
+        <label />
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="primary" disabled={busy || !username.trim() || !password.trim()} onClick={doLogin}>
+            {busy ? '登录中…' : enabled ? '重新登录' : '登录'}
+          </button>
+          {(enabled || passwordConfigured) && (
+            <button disabled={busy} onClick={doLogout}>
+              退出登录
+            </button>
+          )}
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
 function Modal({
   title,
   onClose,
@@ -353,7 +434,7 @@ function Modal({
 }: {
   title: string
   onClose: () => void
-  onSave: () => void
+  onSave?: (() => void) | null
   children: ReactNode
   error?: string
   info?: string
@@ -373,10 +454,12 @@ function Modal({
           </div>
         )}
         <div className="modal-footer">
-          <button onClick={onClose}>取消</button>
-          <button className="primary" onClick={onSave}>
-            保存
-          </button>
+          <button onClick={onClose}>{onSave ? '取消' : '关闭'}</button>
+          {onSave && (
+            <button className="primary" onClick={onSave}>
+              保存
+            </button>
+          )}
         </div>
       </div>
     </div>

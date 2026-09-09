@@ -29,6 +29,7 @@ def create_app(*, bootstrap: bool = True) -> FastAPI:
         market,
         records,
         settings,
+        ths,
     )
 
     app.include_router(market.router)
@@ -37,6 +38,7 @@ def create_app(*, bootstrap: bool = True) -> FastAPI:
     app.include_router(settings.router)
     app.include_router(records.router)
     app.include_router(demo.router)
+    app.include_router(ths.router)
 
     @app.on_event("startup")
     async def _startup() -> None:
