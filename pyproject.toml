@@ -31,9 +31,11 @@ dependencies = [
     "fastapi>=0.110",
     "uvicorn>=0.29",
     "requests>=2.31",
-    # easy-tdx 已从 PyPI 注册表下架（simple index 404），钉住原 wheel 直链保持可解析；
-    # 文件仍由 files.pythonhosted.org 提供。升级需作者重新上架后改回 "easy-tdx>=1.32,<2"。
-    "easy-tdx @ https://files.pythonhosted.org/packages/d3/c0/1eff2749bcacd44ac2fabcca414e1c86e367e58d10a133c3a0c723dd0155/easy_tdx-1.32.4-py3-none-any.whl",
+    # easy-tdx 上游已从 PyPI 下架；源头为用户维护的仓库 hezberg/hard_tdx
+    # （该仓库 main 目前缺 README.md、hatch 强制打包不存在的 web-ui/dist，git 直接
+    #  构建会失败，故用其源码构建的本地 wheel，见下方 tool.uv.sources 与 vendor_wheels/。
+    #  仓库修复后把 source 改回 { git = "https://github.com/hezberg/hard_tdx.git" }）。
+    "easy-tdx>=1.32,<2",
     # vendored ths-favorite（同花顺自选）所需
     "protobuf>=5",
     "loguru>=0.7",
@@ -75,3 +77,6 @@ markers = [
     "e2e: end-to-end smoke tests",
     "live: requires real API key via environment variable (never uses config/settings.json)",
 ]
+
+[tool.uv.sources]
+easy-tdx = { path = "vendor_wheels/easy_tdx-1.32.5-py3-none-any.whl" }
