@@ -33,8 +33,9 @@ dependencies = [
     "requests>=2.31",
     # easy-tdx 上游已从 PyPI 下架；源头为用户维护的仓库 hezberg/hard_tdx
     # （该仓库 main 目前缺 README.md、hatch 强制打包不存在的 web-ui/dist，git 直接
-    #  构建会失败，故用其源码构建的本地 wheel，见下方 tool.uv.sources 与 vendor_wheels/。
-    #  仓库修复后把 source 改回 { git = "https://github.com/hezberg/hard_tdx.git" }）。
+    #  构建会失败，故用其源码构建的本地 wheel——修复内容与重建步骤见
+    #  vendor_wheels/BUILD.md。仓库修复后把 source 改回
+    #  { git = "https://github.com/hezberg/hard_tdx.git" }）。
     "easy-tdx>=1.32,<2",
     # vendored ths-favorite（同花顺自选）所需
     "protobuf>=5",
