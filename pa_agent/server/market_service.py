@@ -247,22 +247,10 @@ def _check_keep_analysis(state: Any, bars: Any) -> None:
         now_ms=now_ms(state),
     )
     if result == "armed_first":
-        bar_count = dss.analysis_bar_count(state.settings())
-        if bars_sufficient(state, bars, bar_count):
-            state.bar_close_wait = flow.BarCloseWait(
-                armed=True,
-                forming_ts=current_forming_ts(
-                    bars,
-                    current_timeframe(state),
-                    symbol=current_symbol(state),
-                    now_ms=now_ms(state),
-                ),
-                force_incremental=False,
-                symbol=current_symbol(state),
-                timeframe=current_timeframe(state),
-                bar_count=bar_count,
-            )
-            state.status("持续跟踪分析已开启：等待K线收盘后将自动开始分析")
+        # 只初始化哨兵：下一根K线收盘时走 new_bar 分支自动分析。
+        # 不武装 bar_close_wait——那是「手动提交等待收盘」的门禁，复用它会把
+        # 手动「开始分析」按钮扣住直到收盘（非交易时段长达数小时）。
+        state.status("持续跟踪分析已开启：下一根K线收盘后自动分析，手动分析不受影响")
     elif result == "new_bar":
         bar_count = dss.analysis_bar_count(state.settings())
         if bars_sufficient(state, bars, bar_count):
