@@ -56,7 +56,7 @@ def get_snapshot() -> dict[str, Any]:
     with _LOCK:
         return {
             "ok": True,
-            "quotes": dict(_SNAPSHOT),
+            "quotes": {k: dict(v) for k, v in _SNAPSHOT.items()},
             "fetched_at": _SNAPSHOT_TS,
             "interval": _interval_s(),
             "in_session": in_session(),
@@ -83,23 +83,41 @@ def in_session(now: _dt | None = None) -> bool:
 
 
 def _split_codes() -> tuple[list[tuple[int, str]], list[tuple[int, str]]]:
-    """(sub_code, market) → (A 股 [(市场int, 代码)], 港股 [(市场int, 代码)])。"""
+    """(sub_code, market) → (A 股 [(市场int, 代码)], 港股 [(市场int, 代码)])。
+
+    market 标签含同花顺全家族：SH/SZ/BJ + SHETF/SZETF（ETF）+ ST（沪市ST）+
+    ZS（指数）+ KC/CY/CYB（科创/创业）+ 数字市场号（177/169/185/120/217 等，
+    为港股各板块变体）。未知标签一律按港股处理（拉不到也不会影响其他）。
+    """
     a: list[tuple[int, str]] = []
     hk: list[tuple[int, str]] = []
+    seen: set[str] = set()
     with _LOCK:
         codes = list(_CODES)
     for sub_code, market in codes:
-        m = (market or "").upper()
         code = str(sub_code)
-        if m == "HK":
-            # 5 位补零后第二位为 8 的是创业板（08001–08999），其余主板
-            hk.append((48 if code[1:2] == "8" else 31, code))
-        elif m in ("SH", "KC"):
-            a.append((1, code))  # 科创板属上交所
-        elif m in ("SZ", "CY"):
-            a.append((0, code))  # 创业板属深交所
-        elif m == "BJ":
-            a.append((2, code))
+        if code in seen:  # 同一股票可出现在多个分组
+            continue
+        seen.add(code)
+        m = str(market or "").upper()
+        if m in ("SH", "KC", "SHETF", "ST"):
+            a.append((1, code))  # 上交所（含科创板/ETF/ST）
+        elif m in ("SZ", "CY", "CYB", "SZETF"):
+            a.append((0, code))  # 深交所（含创业板/ETF）
+        elif m in ("BJ", "151"):
+            a.append((2, code))  # 北交所（151 为备用码）
+        elif m == "ZS":
+            a.append((0 if code.startswith("39") else 1, code))  # 指数按前缀分沪深
+        else:
+            # 港股（含 177/169/185/120/217 等数字市场号变体，代码形如 HK2162）
+            raw = code
+            if raw.upper().startswith("HK") and raw[2:].isdigit():
+                c = raw[2:].zfill(5)
+            elif code.isdigit() and len(code) <= 5:
+                c = code.zfill(5)
+            else:
+                c = code
+            hk.append((48 if len(c) == 5 and c[1] == "8" else 31, c))  # 创业板 / 主板
     return a, hk
 
 
@@ -109,30 +127,26 @@ def _chg(close: float, pre_close: float) -> float | None:
     return round((close - pre_close) / pre_close * 100, 2)
 
 
-def _fetch_round(a_client: Any, hk_client: Any) -> dict[str, dict[str, float]]:
-    """一轮批量拉取，返回 sub_code -> {price, change_pct}。"""
-    out: dict[str, dict[str, float]] = {}
+def _fetch_round(a_client: Any, hk_client: Any) -> dict[str, dict[str, Any]]:
+    """一轮批量拉取，返回 sub_code -> {price, change_pct, name}。"""
+    out: dict[str, dict[str, Any]] = {}
     a, hk = _split_codes()
+
+    def _absorb(df: pd.DataFrame) -> None:  # noqa: ANN001
+        for _, r in df.iterrows():
+            chg = _chg(float(r["close"]), float(r["pre_close"]))
+            out[str(r["code"])] = {
+                "price": float(r["close"]),
+                "change_pct": chg if chg is not None else 0.0,
+                "name": str(r.get("name", "") or ""),
+            }
 
     if a and a_client is not None:
         for chunk in (a[i : i + 80] for i in range(0, len(a), 80)):
-            df = a_client.get_stock_quotes(chunk)
-            for _, r in df.iterrows():
-                chg = _chg(float(r["close"]), float(r["pre_close"]))
-                out[str(r["code"])] = {
-                    "price": float(r["close"]),
-                    "change_pct": chg if chg is not None else 0.0,
-                }
-
+            _absorb(a_client.get_stock_quotes(chunk))
     if hk and hk_client is not None:
         for chunk in (hk[i : i + 80] for i in range(0, len(hk), 80)):
-            df = hk_client.goods_quotes(chunk)
-            for _, r in df.iterrows():
-                chg = _chg(float(r["close"]), float(r["pre_close"]))
-                out[str(r["code"])] = {
-                    "price": float(r["close"]),
-                    "change_pct": chg if chg is not None else 0.0,
-                }
+            _absorb(hk_client.goods_quotes(chunk))
     return out
 
 

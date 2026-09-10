@@ -205,6 +205,7 @@ export default function WatchlistPanel() {
           <div className="wl-items">
             {sortedItems.map((it) => {
               const q = quotes[it.sub_code]
+              const name = it.name || q?.name || it.sub_code
               return (
                 <button
                   key={active.id + it.market + it.code}
@@ -216,8 +217,8 @@ export default function WatchlistPanel() {
                   }
                 >
                   <span className="wl-row">
-                    <span className="wl-name" title={it.name || it.code}>
-                      {it.name || it.code}
+                    <span className="wl-name" title={name}>
+                      {name}
                     </span>
                     <span className="wl-quote" style={{ color: chgColor(q?.change_pct) }}>
                       {q ? (
