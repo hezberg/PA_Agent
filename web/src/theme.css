@@ -482,6 +482,10 @@ input[type='checkbox'] { accent-color: var(--accent); }
 }
 .wl-code { font-family: var(--font-mono); font-size: 10.5px; color: var(--fg-3); }
 .wl-empty { padding: 12px; color: var(--fg-3); font-size: 12px; }
+.wl-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; width: 100%; min-width: 0; }
+.wl-item .wl-row .wl-name { flex: 1; }
+.wl-quote { font-family: var(--font-mono); font-size: 11px; white-space: nowrap; display: inline-flex; gap: 5px; }
+.wl-chg { font-weight: 600; }
 
 .chart-area {
   flex: 3;

@@ -149,6 +149,8 @@ class THSSettings(BaseModel):
     enabled: bool = False
     username: str = ""
     password: str = ""
+    #: 自选行情刷新间隔（秒），仅在 A 股/港股交易时段生效
+    quotes_interval: int = Field(default=5, ge=1, le=120)
 
 
 class TushareSettings(BaseModel):

@@ -54,3 +54,13 @@ def ths_watchlist(request: Request, force: bool = False) -> dict[str, Any]:
     from pa_agent.server import ths_service
 
     return ths_service.fetch_watchlist(get_state(request).settings(), force=force)
+
+
+@router.get("/quotes")
+def ths_quotes_snapshot(request: Request) -> dict[str, Any]:
+    """最新自选行情快照（后台线程按交易时段+间隔刷新；本接口即刻返回）。"""
+    from pa_agent.server import ths_quotes
+
+    state = get_state(request)
+    ths_quotes.note_consumer_activity()
+    return ths_quotes.get_snapshot()

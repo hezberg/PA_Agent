@@ -200,6 +200,20 @@ def fetch_watchlist(settings: Any, *, force: bool = False) -> dict[str, Any]:
 
     with _LOCK:
         _LAST_GOOD_WATCHLIST = result
+
+    # 同步代码表给行情快照线程（A 股 + 港股批量现价）
+    try:
+        from pa_agent.server import ths_quotes
+
+        codes = [
+            (it["sub_code"], it["market"])
+            for g in result.get("groups", [])
+            for it in g.get("items", [])
+        ]
+        if codes:
+            ths_quotes.set_codes(codes)
+    except Exception:  # noqa: BLE001
+        pass
     return result
 
 

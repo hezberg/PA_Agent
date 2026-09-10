@@ -40,6 +40,11 @@ def create_app(*, bootstrap: bool = True) -> FastAPI:
     app.include_router(demo.router)
     app.include_router(ths.router)
 
+    # 同花顺自选行情快照后台线程（交易时段 + 有人消费时才拉取）
+    from pa_agent.server import ths_quotes
+
+    ths_quotes.start_loop(lambda: state.settings())
+
     @app.on_event("startup")
     async def _startup() -> None:
         state.hub.attach_loop(asyncio.get_running_loop())

@@ -348,6 +348,7 @@ function ThsModal({ settings, onClose }: { settings: SettingsPayload; onClose: (
   const ths = settings.ths as Record<string, unknown>
   const [username, setUsername] = useState(String(ths.username ?? ''))
   const [password, setPassword] = useState('')
+  const [intervalS, setIntervalS] = useState(Number(ths.quotes_interval ?? 5))
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
   const [error, setError] = useState('')
@@ -375,8 +376,20 @@ function ThsModal({ settings, onClose }: { settings: SettingsPayload; onClose: (
     setUsername(''); setPassword('')
   }
 
+  async function save() {
+    ths.username = username.trim()
+    if (password.trim()) ths.password = password.trim()
+    ths.quotes_interval = intervalS
+    const err = await saveSettings(settings)
+    if (err) setError(err)
+    else {
+      setMsg('已保存')
+      setTimeout(onClose, 600)
+    }
+  }
+
   return (
-    <Modal title="自选股登录（同花顺）" onClose={onClose} onSave={null} error={error} info={msg}>
+    <Modal title="自选股登录（同花顺）" onClose={onClose} onSave={save} error={error} info={msg}>
       <div className="form-row">
         <label>当前状态</label>
         <span className="kv-value">
@@ -401,10 +414,20 @@ function ThsModal({ settings, onClose }: { settings: SettingsPayload; onClose: (
         />
       </div>
       <div className="form-row">
+        <label>行情刷新间隔</label>
+        <select value={intervalS} onChange={(e) => setIntervalS(Number(e.target.value))}>
+          {[5, 10, 15, 30, 60].map((n) => (
+            <option key={n} value={n}>
+              {n} 秒
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="form-row">
         <label />
         <span className="form-hint" style={{ marginLeft: 0 }}>
-          密码保存在本机 settings.json（gitignore），仅用于会话过期后自动重登。
-          若同花顺要求验证码会登录失败——在手机 App 上保持常用设备可降低风控概率。
+          自选行情仅在交易时段（A 股 9:15–11:30 / 13:00–15:15，港股 09:30–16:00）按此间隔自动刷新。
+          密码仅存本机用于自动重登；若同花顺要求验证码会登录失败。
         </span>
       </div>
       <div className="form-row">
