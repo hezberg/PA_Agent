@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react'
 import { api, openStream } from './api/client'
 import { useStore } from './store'
+import { useIsMobile } from './useIsMobile'
+import MobileShell from './components/MobileShell'
 import TopBar from './components/TopBar'
 import FlowBar from './components/FlowBar'
 import ChartPanel from './components/ChartPanel'
@@ -35,6 +37,7 @@ export default function App() {
   const demoCloser = useRef<null | (() => void)>(null)
   const chartOpen = useStore((s) => s.chartOpen)
   const toggleChart = useStore((s) => s.toggleChart)
+  const isMobile = useIsMobile()
 
   useEffect(() => {
     // ── Bootstrap static + dynamic meta ────────────────────────────────────
@@ -173,6 +176,8 @@ export default function App() {
     }, 15000)
     return () => clearInterval(t)
   }, [])
+
+  if (isMobile) return <MobileShell />
 
   return (
     <div className="app">

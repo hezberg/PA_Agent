@@ -1,9 +1,10 @@
 // 底部状态栏：运行状态 / 刷新计时 / 倒计时 / 品种信息 / 模型 / 免责声明，单行承载。
+// mobile=true 时精简为两个字段（状态文本 + 刷新计时）。
 import { useEffect, useState } from 'react'
 import { useStore } from '../store'
 import { tfZh, useSymbolName } from '../symbolName'
 
-export default function StatusBar() {
+export default function StatusBar({ mobile = false }: { mobile?: boolean }) {
   const statusText = useStore((s) => s.statusText)
   const demoName = useStore((s) => s.demoName)
   const meta = useStore((s) => s.meta)
@@ -32,7 +33,7 @@ export default function StatusBar() {
   }
 
   return (
-    <footer className="statusbar">
+    <footer className={`statusbar${mobile ? ' m-statusbar' : ''}`}>
       <span className={paused ? 'dot-warn' : 'dot-ok'} />
       {demoName && <span className="demo-chip">演示模式 · {demoName}</span>}
       <span className="ellipsis">{statusText || '就绪'}</span>
@@ -40,16 +41,20 @@ export default function StatusBar() {
       {waitClose?.armed && waitClose.seconds_remaining !== null && waitClose.seconds_remaining !== undefined && (
         <span>还剩 {waitClose.seconds_remaining} 秒</span>
       )}
-      <span style={{ flex: 1 }} />
-      {meta && (
-        <span className="ellipsis" title={meta.ai_mode_label}>
-          {name && <>{name} </>}
-          {meta.symbol} · {tfZh(meta.timeframe)} · {meta.active_label}
-          {meta.source_connected ? '' : '（未连接）'}
-        </span>
+      {!mobile && (
+        <>
+          <span style={{ flex: 1 }} />
+          {meta && (
+            <span className="ellipsis" title={meta.ai_mode_label}>
+              {name && <>{name} </>}
+              {meta.symbol} · {tfZh(meta.timeframe)} · {meta.active_label}
+              {meta.source_connected ? '' : '（未连接）'}
+            </span>
+          )}
+          {meta?.ai_mode_label && <span className="ellipsis">{meta.ai_mode_label}</span>}
+          <span>分析仅供参考，不构成投资建议</span>
+        </>
       )}
-      {meta?.ai_mode_label && <span className="ellipsis">{meta.ai_mode_label}</span>}
-      <span>分析仅供参考，不构成投资建议</span>
     </footer>
   )
 }

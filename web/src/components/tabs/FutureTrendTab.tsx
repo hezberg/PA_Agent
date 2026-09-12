@@ -1,5 +1,6 @@
 import { useStore } from '../../store'
 import { zhTerm, termHint } from '../../zhTerms'
+import TermTip from '../TermTip'
 
 type Pred = {
   direction?: string
@@ -81,8 +82,9 @@ export default function FutureTrendTab() {
           <div className="panel-title">下一个市场周期预测</div>
           <div className="kv-row">
             <span className="kv-key">周期</span>
-            <span className="kv-value term" title={termHint(nextCycle.cycle)}>
-              {zhTerm(nextCycle.cycle)} {nextCycle.direction ? `(${dirZh(nextCycle.direction)})` : ''}
+            <span className="kv-value">
+              <TermTip text={zhTerm(nextCycle.cycle)} hint={termHint(nextCycle.cycle)} />{' '}
+              {nextCycle.direction ? `(${dirZh(nextCycle.direction)})` : ''}
             </span>
           </div>
           {nextCycle.probabilities && (

@@ -12,7 +12,7 @@ const REFRESH_MS = 30 * 60 * 1000
 const QUOTES_MS = 2000
 const ALL_ID = '__all__'
 
-type Quote = { price: number; change_pct: number }
+type Quote = { price: number; change_pct: number; name?: string }
 
 function chgColor(v: number | undefined): string | undefined {
   if (v === undefined || v === 0) return undefined

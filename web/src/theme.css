@@ -986,3 +986,111 @@ table.data-table tr:hover td { background: var(--surface-2); }
   from { transform: translateX(30px); opacity: 0; }
   to { transform: translateX(0); opacity: 1; }
 }
+
+/* ══ 移动端（≤768px）：底部 Tab 三视图骨架 ═══════════════════════════════ */
+.m-app {
+  padding-top: env(safe-area-inset-top);
+}
+.m-topbar {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 10px;
+  background: var(--surface-1);
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  z-index: 40;
+}
+.m-row1 { display: flex; align-items: center; gap: 10px; }
+.m-sym { display: flex; align-items: baseline; gap: 8px; flex: 1; min-width: 0; }
+.m-sym-name { font-size: 15px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.m-price { font-family: var(--font-mono); font-size: 16px; font-weight: 700; }
+.m-row1 button { flex-shrink: 0; min-width: 72px; }
+.m-row2 { display: flex; align-items: center; gap: 6px; }
+.m-symbox { flex: 1; min-width: 0; }
+.m-symbox input { width: 100%; }
+.m-row2 select { max-width: 92px; flex-shrink: 0; }
+.m-fetch { flex-shrink: 0; }
+.m-menu { flex-shrink: 0; }
+.m-menu .menu { left: auto; right: 0; top: calc(100% + 4px); }
+.m-blocked {
+  font-size: 11px;
+  color: var(--warning);
+  padding-top: 2px;
+}
+.m-main { flex: 1; display: flex; min-height: 0; overflow: hidden; }
+.m-main > * { flex: 1; min-width: 0; }
+.m-chart { position: relative; display: flex; min-height: 0; }
+.m-chart .chart-area { flex: 1; border-right: none; }
+.m-chart .chart-collapse { display: none; } /* 移动端图表常驻，收起=切回分析 tab */
+.m-analysis { display: flex; flex-direction: column; min-height: 0; background: var(--surface-1); }
+.m-tabs { display: flex; border-bottom: 1px solid var(--line); }
+.m-tabs button { flex: 1; }
+.m-tab-body { flex: 1; overflow: auto; padding: 10px; min-height: 0; }
+.m-tabbar {
+  display: flex;
+  border-top: 1px solid var(--line);
+  background: var(--surface-1);
+  padding-bottom: env(safe-area-inset-bottom);
+  z-index: 40;
+}
+.m-tabbar button {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 0 4px;
+  border: none;
+  background: transparent;
+  color: var(--fg-2);
+  font-size: 11px;
+  cursor: pointer;
+}
+.m-tabbar button.on { color: var(--accent); }
+.m-tab-ico { font-size: 17px; line-height: 1; }
+.m-statusbar { font-size: 10px; padding: 3px 10px; }
+
+/* 移动端自选面板：全宽、去竖轨 */
+@media (max-width: 768px) {
+  .watchlist { width: 100%; border-right: none; }
+  .watchlist-rail { display: none; }
+  .wl-head .wl-act[title='收起自选清单'] { display: none; }
+  /* 弹窗 → 底部滑入面板 */
+  .modal-overlay { align-items: flex-end; }
+  .modal {
+    width: 100%;
+    max-height: 86vh;
+    border-radius: 14px 14px 0 0;
+    animation: m-sheet-in 0.22s ease;
+  }
+  @keyframes m-sheet-in {
+    from { transform: translateY(40px); opacity: 0.4; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+  .form-row label { width: 110px; }
+  .kv-key { width: 82px; }
+  .symbol-candidates { max-height: 220px; }
+}
+
+/* 术语气泡（桌面 hover / 触屏点按） */
+.term { position: relative; cursor: help; }
+.term-pop {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 6px);
+  z-index: 90;
+  width: max-content;
+  max-width: 260px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--surface-3);
+  border: 1px solid var(--line-strong);
+  color: var(--fg);
+  font-size: 11.5px;
+  line-height: 1.5;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+  cursor: default;
+  white-space: normal;
+}

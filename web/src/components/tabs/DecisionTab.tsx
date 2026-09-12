@@ -1,5 +1,6 @@
 import { useStore } from '../../store'
 import { zhTerm, termHint } from '../../zhTerms'
+import TermTip from '../TermTip'
 import type { StructureLevel } from '../../api/types'
 
 function pick(obj: Record<string, unknown>, key: string): string {
@@ -8,16 +9,9 @@ function pick(obj: Record<string, unknown>, key: string): string {
   return String(v)
 }
 
-// 枚举值 → 中文展示，鼠标悬停显示术语含义
+// 枚举值 → 中文展示；悬停/点按显示术语含义（TermTip）
 function TermValue({ value }: { value: string | null | undefined }) {
-  const zh = zhTerm(value)
-  const hint = termHint(value)
-  if (!hint) return <span className="kv-value">{zh}</span>
-  return (
-    <span className="kv-value term" title={hint}>
-      {zh}
-    </span>
-  )
+  return <TermTip className="kv-value" text={zhTerm(value)} hint={termHint(value)} />
 }
 
 // 详情 tab：决策票之外的完整决策明细（诊断 / 交易者方程 / 失效条件 / 阶段 JSON）。
@@ -53,10 +47,10 @@ export default function DecisionTab() {
             <span className="kv-key">检测形态</span>
             <span className="kv-value">
               {(diag.detected_patterns as string[]).map((p, i) => (
-                <span key={p + i}>
-                  {i > 0 && '、'}
-                  <span className="term" title={termHint(p)}>{zhTerm(p)}</span>
-                </span>
+              <span key={p + i}>
+                {i > 0 && '、'}
+                <TermTip text={zhTerm(p)} hint={termHint(p)} />
+              </span>
               ))}
             </span>
           </div>
