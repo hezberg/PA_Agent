@@ -1,6 +1,7 @@
 // 同花顺自选清单：最左侧固定宽度面板（可收起成竖轨）。
 // 分组小标签横排换行（「全部」聚合 + 「我的自选」优先）；条目=中文名+代码+现价涨跌；
 // 点击=切票+自动展开K线；行情为交易时段内按设置间隔刷新的快照（非轮询式逐票请求）。
+// 移动端：顶部下拉（列表置顶时）→ 释放整页刷新，替代被应用式布局挡住的 Chrome 原生下拉刷新。
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api } from '../api/client'
 import { useStore } from '../store'

@@ -993,9 +993,16 @@ table.data-table tr:hover td { background: var(--surface-2); }
   to { transform: translateX(0); opacity: 1; }
 }
 
-/* ══ 移动端（≤768px）：底部 Tab 三视图骨架 ═══════════════════════════════ */
+/* ══ 移动端（仅 MobileShell 渲染时生效）：文档流滚动骨架 ═════════════════
+   列表/分析内容随页面自然滚动（根滚动器可滚 → Chrome 原生下拉刷新可用）；
+   顶栏 sticky、底栏 fixed；图表视图定高独占（其手势交给图表画布）。 */
 .m-app {
+  display: block;
+  min-height: 100dvh;
   padding-top: env(safe-area-inset-top);
+  /* 底部给 fixed 的 tabbar+statusbar 留位 */
+  padding-bottom: calc(80px + env(safe-area-inset-bottom));
+  background: var(--bg);
 }
 .m-topbar {
   display: flex;
@@ -1025,16 +1032,33 @@ table.data-table tr:hover td { background: var(--surface-2); }
   color: var(--warning);
   padding-top: 2px;
 }
-.m-main { flex: 1; display: flex; min-height: 0; overflow: hidden; }
-.m-main > * { flex: 1; min-width: 0; }
-.m-chart { position: relative; display: flex; min-height: 0; }
+/* 列表/分析走文档流：不在内部滚动容器里，保证原生下拉刷新 */
+.m-main { display: block; }
+.m-main .watchlist { width: 100%; border-right: none; display: block; }
+.m-main .wl-items { overflow-y: visible; flex: none; }
+.m-main .wl-head .wl-act[title='收起自选清单'] { display: none; }
+/* 图表视图：定高独占视口余量，页面不滚动，手势全交给画布 */
+.m-chart {
+  display: flex;
+  height: calc(100dvh - 178px);
+  border-bottom: 1px solid var(--line);
+}
 .m-chart .chart-area { flex: 1; border-right: none; }
-.m-chart .chart-collapse { display: none; } /* 移动端图表常驻，收起=切回分析 tab */
-.m-analysis { display: flex; flex-direction: column; min-height: 0; background: var(--surface-1); }
+.m-chart .chart-collapse { display: none; }
+.m-analysis {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100dvh - 178px);
+  background: var(--surface-1);
+}
 .m-tabs { display: flex; border-bottom: 1px solid var(--line); }
 .m-tabs button { flex: 1; }
-.m-tab-body { flex: 1; overflow: auto; padding: 10px; min-height: 0; }
+.m-tab-body { flex: 1; overflow: visible; padding: 10px; }
 .m-tabbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
   display: flex;
   border-top: 1px solid var(--line);
   background: var(--surface-1);
@@ -1056,10 +1080,20 @@ table.data-table tr:hover td { background: var(--surface-2); }
 }
 .m-tabbar button.on { color: var(--accent); }
 .m-tab-ico { font-size: 17px; line-height: 1; }
-.m-statusbar { font-size: 10px; padding: 3px 10px; }
+.m-statusbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(54px + env(safe-area-inset-bottom));
+  z-index: 40;
+  background: var(--surface-1);
+  font-size: 10px;
+  padding: 3px 10px;
+}
 
 /* 移动端自选面板：全宽、去竖轨 */
 @media (max-width: 768px) {
+  body { overflow: visible; } /* 放开根滚动器：Chrome 原生下拉刷新可用（桌面仍 hidden） */
   .watchlist { width: 100%; border-right: none; }
   .watchlist-rail { display: none; }
   .wl-head .wl-act[title='收起自选清单'] { display: none; }
