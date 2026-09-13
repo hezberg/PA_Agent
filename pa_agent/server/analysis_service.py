@@ -608,6 +608,7 @@ def _build_orchestrator(state: Any) -> Any:
             pending_writer=parts[4],
             exp_reader=parts[5],
             settings=state.settings(),
+            llm_opt=getattr(state.settings(), "llm_opt", None),
         )
     except Exception as exc:  # noqa: BLE001
         logger.warning("Could not build orchestrator: %s", exc)

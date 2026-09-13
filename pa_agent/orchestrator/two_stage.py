@@ -318,6 +318,7 @@ class TwoStageOrchestrator:
         pending_writer: "PendingWriter",
         exp_reader: "ExperienceReader",
         settings: Optional["Settings"] = None,
+        llm_opt: Any = None,
     ) -> None:
         self._client = client
         self._assembler = assembler
@@ -326,6 +327,31 @@ class TwoStageOrchestrator:
         self._pending_writer = pending_writer
         self._exp_reader = exp_reader
         self._settings = settings
+        self._llm_opt = llm_opt
+        self._s1_light_client: Any = None
+
+    def _stage1_client(self) -> "DeepSeekClient":
+        """优化④：阶段一走轻模型（dual_model 开启且配置了 model_light 时）。"""
+        if self._llm_opt is None or not getattr(self._llm_opt, "dual_model", False):
+            return self._client
+        light_model = str(getattr(self._llm_opt, "model_light", "") or "").strip()
+        if not light_model:
+            return self._client
+        if self._s1_light_client is None:
+            import copy
+
+            from pa_agent.ai.deepseek_client import DeepSeekClient
+
+            prov = copy.deepcopy(self._settings.provider)
+            prov.model = light_model
+            self._s1_light_client = DeepSeekClient(settings=prov)
+        return self._s1_light_client
+
+    def _stage1_effort(self, timeframe: str, base_effort: str) -> str:
+        """优化③：短周期（≤15m）推理档位降为 medium（reasoning_tier 开启时）。"""
+        if self._llm_opt is None or not getattr(self._llm_opt, "reasoning_tier", False):
+            return base_effort
+        return "medium" if timeframe in ("1m", "5m", "15m") else base_effort
 
     def _validation_settings(self) -> Any:
         if self._settings is not None and hasattr(self._settings, "validation"):
@@ -436,6 +462,9 @@ class TwoStageOrchestrator:
             on_stage_prompt("stage1", s1_system, s1_user)
 
         _thinking, _effort = self._thinking_params()
+        # llm-opt ③④：阶段一可降推理档位/走轻模型；阶段二保持主模型主档位
+        s1_effort = self._stage1_effort(getattr(frame, "timeframe", "") or "", _effort)
+        s1_client = self._stage1_client()
         s1_streamed_reasoning = False
         s1_streamed_content = False
 
@@ -458,8 +487,9 @@ class TwoStageOrchestrator:
                 on_content_token=_on_s1_content,
                 cancel_token=cancel_token,
                 thinking=_thinking,
-                reasoning_effort=_effort,
+                reasoning_effort=s1_effort,
                 stage_label="Stage 1",
+                client=s1_client,
             )
         except Exception as exc:
             if self._is_network_error(exc):
@@ -1002,9 +1032,10 @@ class TwoStageOrchestrator:
         thinking: bool,
         reasoning_effort: str,
         stage_label: str,
+        client: "DeepSeekClient | None" = None,
     ) -> Any:
         """Call stream_chat once; errors propagate to the stage error path."""
-        return self._client.stream_chat(
+        return (client or self._client).stream_chat(
             messages,
             on_reasoning_token=on_reasoning_token,
             on_content_token=on_content_token,
