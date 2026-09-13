@@ -83,11 +83,16 @@ def _drop_manager() -> None:
 
 
 def _subscribable_code(code: str, market: str | None) -> str:
-    """同花顺 市场码+代码 → 本系统可直接订阅的代码。"""
+    """同花顺 市场码+代码 → 本系统可直接订阅的代码。
+
+    港股（显式 HK 或数字市场号 177/169/185/120/217 等）代码形如 HK2162 / 2162，
+    统一剥前缀并补零到 5 位（02162），与行情快照、本地名称表的键一致。
+    """
     m = (market or "").upper()
     c = str(code or "").strip()
-    if m == "HK":
-        return c.zfill(5)
+    if m == "HK" or m.isdigit():
+        raw = c[2:] if c.upper().startswith("HK") and c[2:].isdigit() else c
+        return raw.zfill(5) if raw.isdigit() and len(raw) <= 5 else c
     return c  # SH/SZ/BJ/KC/CY：6 位裸代码本身可路由
 
 
@@ -163,15 +168,19 @@ def fetch_watchlist(settings: Any, *, force: bool = False) -> dict[str, Any]:
         groups: dict[str, Any] = manager.get_all_groups(include_self_stocks=True)
         out_groups: list[dict[str, Any]] = []
         for name, group in groups.items():
-            items = [
-                {
-                    "code": it.code,
-                    "market": it.market or "",
-                    "sub_code": _subscribable_code(it.code, it.market),
-                    "name": _zh_name(it.code, it.market) or "",
-                }
-                for it in group.items
-            ]
+            items = []
+            for it in group.items:
+                sub_code = _subscribable_code(it.code, it.market)
+                items.append(
+                    {
+                        "code": it.code,
+                        "market": it.market or "",
+                        "sub_code": sub_code,
+                        # 注意：StockItem 无 name 字段（同花顺自选接口不回名称），
+                        # 中文名一律由本地名称表按规范化代码回填。
+                        "name": _zh_name(sub_code, it.market) or "",
+                    }
+                )
             out_groups.append(
                 {
                     "id": group.group_id,
