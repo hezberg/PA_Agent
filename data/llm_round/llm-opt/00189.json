@@ -1,0 +1,21 @@
+{
+ "symbol": "00189",
+ "elapsed_s": 140.6,
+ "usage": {
+  "prompt_tokens": 174344,
+  "cached_prompt_tokens": 105216,
+  "completion_tokens": 15320,
+  "total_tokens": 189664
+ },
+ "gate_result": "proceed",
+ "cycle_position": "broad_channel",
+ "decision": {
+  "order_type": "限价单",
+  "order_direction": "做空",
+  "entry_price": 12.6,
+  "stop_loss_price": 12.77,
+  "take_profit_price": 12.43,
+  "take_profit_price_2": 12.11,
+  "trade_confidence": 62
+ }
+}
