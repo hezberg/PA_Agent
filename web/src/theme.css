@@ -1134,3 +1134,9 @@ table.data-table tr:hover td { background: var(--surface-2); }
   cursor: default;
   white-space: normal;
 }
+.m-analysis .session-strip { padding: 0 6px; }
+.m-analysis .stepper { flex: 1; min-width: 0; justify-content: space-between; }
+.m-analysis .st { gap: 2px; }
+.m-analysis .st .dot { width: 14px; height: 14px; font-size: 8px; }
+.m-analysis .st .cap { font-size: 10px; }
+.m-analysis .st-link { width: 8px; margin: 0 2px; flex-shrink: 1; }

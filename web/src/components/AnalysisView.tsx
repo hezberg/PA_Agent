@@ -1,6 +1,7 @@
-// 移动端「分析」视图：决策票 + 标签页（实时/详情/未来预期/更多）。
+// 移动端「分析」视图：流程条（分析进行时）+ 决策票 + 标签页（实时/详情/未来/原始）。
 import { useEffect, useState } from 'react'
 import { useStore } from '../store'
+import FlowBar from './FlowBar'
 import DecisionTicket from './DecisionTicket'
 import StreamTab from './tabs/StreamTab'
 import DecisionTab from './tabs/DecisionTab'
@@ -30,6 +31,7 @@ export default function AnalysisView() {
 
   return (
     <section className="m-analysis">
+      <FlowBar />
       <DecisionTicket />
       <nav className="tabs m-tabs">
         {TABS.map((t) => (
