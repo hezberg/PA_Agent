@@ -1,0 +1,21 @@
+{
+ "symbol": "688010",
+ "elapsed_s": 74.5,
+ "usage": {
+  "prompt_tokens": 166073,
+  "cached_prompt_tokens": 105472,
+  "completion_tokens": 9477,
+  "total_tokens": 175550
+ },
+ "gate_result": "proceed",
+ "cycle_position": "trending_tr",
+ "decision": {
+  "order_type": "限价单",
+  "order_direction": "做空",
+  "entry_price": 25.5,
+  "stop_loss_price": 25.92,
+  "take_profit_price": 25.08,
+  "take_profit_price_2": 24.31,
+  "trade_confidence": 55
+ }
+}

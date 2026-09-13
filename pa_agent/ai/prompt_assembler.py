@@ -903,11 +903,25 @@ class PromptAssembler:
         experience_reader: Any = None,
         *,
         prompt_settings: Any = None,
+        llm_opt_settings: Any = None,
     ) -> None:
         self._prompt_dir = prompt_dir
         self._experience_reader = experience_reader
         self._prompt_settings = prompt_settings
+        self._llm_opt = llm_opt_settings
         self._txt_cache: dict[str, str] = {}
+
+    @property
+    def _kline_summary(self) -> bool:
+        """优化①：K11–K100 压缩为每 5 根摘要（逐棒分析仅限 K10–K1）。"""
+        cfg = self._llm_opt
+        return bool(cfg is None or getattr(cfg, "kline_summary", True))
+
+    @property
+    def _prompt_reorder(self) -> bool:
+        """优化②：静态指令前置到动态 K 线数据之前（吃满 prompt cache）。"""
+        cfg = self._llm_opt
+        return bool(cfg is None or getattr(cfg, "prompt_reorder", True))
 
     def _load_full_strategy_library(self) -> bool:
         cfg = self._prompt_settings
@@ -971,35 +985,80 @@ class PromptAssembler:
 
     # ── K-line table rendering ────────────────────────────────────────────────
 
-    @staticmethod
-    def _render_kline_table(frame: KlineFrame, limit: int | None = None) -> str:
-        """Render the K-line data as a text table (newest bar first)."""
+    def _render_kline_table(self, frame: KlineFrame, limit: int | None = None) -> str:
+        """Render the K-line data as a text table (newest bar first).
+
+        优化①（kline_summary）：K1–K10 保留完整行（逐棒分析窗口），
+        K11–K100 压缩为每 5 根一行的区间摘要。
+        """
+        compress = self._kline_summary and limit is None
+        detail_n = 10
         lines = [
             "序号 | 时间                | 开盘价    | 最高价    | 最低价    | 收盘价    | 阳阴 | 成交量    | EMA20     | ATR14",
             "-----+--------------------+----------+----------+----------+----------+------+----------+-----------+----------",
         ]
         bars = frame.bars[:limit] if limit is not None else frame.bars
-        for i, bar in enumerate(bars):
+        detail_n = min(detail_n, len(bars)) if compress else len(bars)
+
+        def _row(i: int, bar) -> str:
             ema = frame.indicators.ema20[i]
             atr = frame.indicators.atr14[i]
             ema_str = f"{ema:.4f}" if not math.isnan(ema) else "N/A"
             atr_str = f"{atr:.4f}" if not math.isnan(atr) else "N/A"
             yang_yin = bar_candle_direction_label(bar)
             dt = format_epoch_for_display(bar.ts_open, short=True)
-            lines.append(
+            return (
                 f"{bar.seq:<4} | {dt:<19} | {bar.open:<9.4f} | {bar.high:<9.4f} | "
                 f"{bar.low:<9.4f} | {bar.close:<9.4f} | {yang_yin:<4} | {bar.volume:<9.0f} | "
                 f"{ema_str:<10} | {atr_str}"
             )
+
+        for i in range(detail_n):
+            lines.append(_row(i, bars[i]))
+
+        if compress and len(bars) > detail_n:
+            tail = bars[detail_n:]
+            tail_start = detail_n + 1  # K 编号（K1=最新）
+            lines.append(
+                f"（以下 K{len(bars)}–K{tail_start} 为背景区，每 5 根压缩为一行："
+                f"区间 | 时间范围 | 高/低/收 | 量合计 | EMA20 首→尾；逐棒细节已省略）"
+            )
+            for g in range(0, len(tail), 5):
+                grp = tail[g : g + 5]
+                k_hi = tail_start + g
+                k_lo = k_hi + len(grp) - 1
+                t0 = format_epoch_for_display(grp[-1].ts_open, short=True)
+                t1 = format_epoch_for_display(grp[0].ts_open, short=True)
+                hi = max(b.high for b in grp)
+                lo = min(b.low for b in grp)
+                close = grp[0].close
+                vol = sum(b.volume for b in grp)
+                e_first = frame.indicators.ema20[detail_n + g]
+                e_last = frame.indicators.ema20[detail_n + g + len(grp) - 1]
+                e_str = f"{e_last:.4g}→{e_first:.4g}" if not (math.isnan(e_first) or math.isnan(e_last)) else "N/A"
+                lines.append(
+                    f"K{k_hi}-K{k_lo} | {t0}~{t1} | 高 {hi:.4g} | 低 {lo:.4g} | "
+                    f"收 {close:.4g} | 量 {vol:.3g} | EMA {e_str}"
+                )
         lines.append(_KLINE_INDICATOR_NOTE)
         return "\n".join(lines)
 
-    @staticmethod
-    def _render_kline_feature_table(frame: KlineFrame, limit: int | None = None) -> str:
-        """Render方案 A single-bar geometry features for prompt grounding."""
+    def _render_kline_feature_table(self, frame: KlineFrame, limit: int | None = None) -> str:
+        """Render方案 A single-bar geometry features for prompt grounding.
+
+        优化①：几何特征服务于逐棒分析（K10–K1），K11+ 行整体省略。
+        """
+        compress = self._kline_summary and limit is None
         shown = limit if limit is not None else len(frame.bars)
+        omit_note = ""
+        if compress and shown > 10:
+            omit_note = (
+                f"（K{shown}–K11 几何特征已省略：逐棒几何仅对近期窗口有意义；"
+                f"背景结构见上方压缩摘要与程序预填 §2.2）\n"
+            )
+            shown = 10
         lines = [
-            f"（几何特征：最近 {shown} 根已收盘 K 线；「类型」= 单字段 bar_type，优先级 inside/outside > doji/trend/flat/other；多棒形态已用完整窗口计算）",
+            omit_note + f"（几何特征：最近 {shown} 根已收盘 K 线；「类型」= 单字段 bar_type，优先级 inside/outside > doji/trend/flat/other；多棒形态已用完整窗口计算）",
             "序号 | 类型          | 实体比 | 上影比 | 下影比 | 收盘位置 | Range/ATR | EMA关系 | 与前棒重叠 | ii/iii | ioi | 微双 | 缺口 | EMA缺口数 | 近5突破 | 后续",
             "-----+---------------+--------+--------+--------+----------+-----------+---------+------------+--------+-----+------+-------+-----------+---------+------",
         ]
@@ -1274,6 +1333,43 @@ class PromptAssembler:
             bg_window = (
                 f"**长程背景**（当前仅 {n_bars} 根，不足 41 根，与近期窗口重叠；"
                 f"以程序预填 §2.2 为准）：\n"
+            )
+        # 优化②：静态指令块（分层规则+输出要求）前置，动态数据块垫后，
+        # 使同标的连续轮次的请求前缀尽可能一致以命中 prompt cache。
+        if self._prompt_reorder:
+            return (
+                "## 阶段一任务\n\n"
+                "你现在只执行阶段一：市场诊断与闸门判断。不要评估具体下单、止损、止盈或仓位。\n\n"
+                f"{stage1_context}\n\n"
+                "---\n\n"
+                f"## 分析窗口分层规则（与程序 §2.2/§2.3/§2.4 预填一致，必须遵守）\n\n"
+                f"{bg_window}"
+                f"- swing 高低点、磁力位参考 → 写入 `htf_context`；§2.2 背景方向\n"
+                f"- **禁止**用背景方向否决近期 `direction`；冲突时近期为主、背景作风险参考\n\n"
+                f"**近期结构 K{min(40, n_bars)}–K1：**\n"
+                f"- `cycle_position`、`direction`、通道/区间/波段主结构\n"
+                f"- 程序 §2.3 方向投票与多数闸门 bar_range 优先此窗口\n\n"
+                f"**即时惯性 K{min(8, n_bars)}–K1：**\n"
+                f"- §2.4 Always In、§2.5 惯性强度、近端 spike_stage / 尖峰识别\n\n"
+                f"**即时信号 K{min(10, n_bars)}–K1：**\n"
+                f"- 信号棒/入场棒/二次入场/突破失败（阶段二 §9 裁定窗口）\n\n"
+                f"**逐棒摘要 K5–K1：**\n"
+                f"- `bar_by_bar_summary` **必须**恰好 5 条（窗口≥5 根时），每条 1 句 reason\n\n"
+                f"{_STAGE1_TAIL_REMINDER}\n\n"
+                "---\n\n"
+                f"## 当前分析目标\n\n"
+                f"品种:{frame.symbol} 周期:{frame.timeframe} K线数量:{n_bars}\n"
+                f"（K线序号：1=最新已收盘，最大 K{n_bars}；"
+                f"每个决策节点的 bar_range 由你自行选择子区间，勿超出 K{n_bars}-K1）\n\n"
+                f"## K线数据(序号1=最新已收盘K线,序号越大越早;不含当前未收盘K线;"
+                f"阳阴列由程序按收盘价与开盘价计算:收盘>开盘=阳线,收盘<开盘=阴线,相等=平)\n\n"
+                f"{kline_table}\n\n"
+                "## K线几何特征(程序预计算；「类型」列为单字段 bar_type，判定优先级：inside/outside > doji/trend/flat/other；"
+                "不替代周期判断；基于当前 N 根已收盘 K 线，指标非全历史延续)\n\n"
+                f"{feature_table}\n\n"
+                + (f"{simple_features_block}\n\n" if simple_features_block else "")
+                + (f"{prefill_hint}\n\n" if prefill_hint else "")
+                + f"请根据以上数据，严格输出阶段一 JSON 诊断结果。"
             )
         return (
             "## 阶段一任务\n\n"

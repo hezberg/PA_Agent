@@ -118,6 +118,7 @@ class AppContext:
             prompt_dir=PROMPT_DIR,
             experience_reader=exp_reader,
             prompt_settings=settings.prompt,
+            llm_opt_settings=settings.llm_opt,
         )
 
         # ── Validator & router ────────────────────────────────────────────────

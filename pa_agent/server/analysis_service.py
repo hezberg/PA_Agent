@@ -575,7 +575,12 @@ def _make_kline_snapshot_fn(state: Any) -> Any:
         )
         if frame is None:
             return ""
-        return PromptAssembler._render_kline_table(frame)
+        from pa_agent.config.paths import PROMPT_DIR
+
+        assembler = PromptAssembler(
+            prompt_dir=PROMPT_DIR, llm_opt_settings=state.settings().llm_opt
+        )
+        return assembler._render_kline_table(frame)
 
     return _snapshot
 
@@ -603,6 +608,7 @@ def _build_orchestrator(state: Any) -> Any:
             pending_writer=parts[4],
             exp_reader=parts[5],
             settings=state.settings(),
+            llm_opt=getattr(state.settings(), "llm_opt", None),
         )
     except Exception as exc:  # noqa: BLE001
         logger.warning("Could not build orchestrator: %s", exc)
