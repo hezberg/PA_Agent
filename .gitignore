@@ -97,3 +97,4 @@ web/node_modules/
 
 # 备份配置文件(含密钥)不入库
 config/*.bak*
+data/llm_round/

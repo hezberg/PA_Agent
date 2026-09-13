@@ -19,7 +19,7 @@ for path in $staged; do
 			echo "pre-commit: blocked log file: $path"
 			exit 1
 			;;
-		records/pending/*.json|records/pending/*.jsonl)
+		records/pending/*.json|records/pending/*.jsonl|data/llm_round/*.json|data/llm_round/_pending/*)
 			echo "pre-commit: blocked analysis record: $path"
 			exit 1
 			;;
