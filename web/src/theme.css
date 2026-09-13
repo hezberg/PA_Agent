@@ -134,7 +134,13 @@ input[type='checkbox'] { accent-color: var(--accent); }
 
 /* ── 顶栏 ───────────────────────────────────────────────────────────────── */
 
-.app { display: flex; flex-direction: column; height: 100vh; }
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh; /* 桌面回退 */
+  /* 移动端浏览器：100vh 含地址栏背后区域会把底部 Tab 遮住；dvh 随工具栏收放自适应 */
+  height: 100dvh;
+}
 
 .topbar {
   display: flex;
