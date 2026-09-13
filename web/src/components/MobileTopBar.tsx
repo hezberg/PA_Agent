@@ -28,7 +28,8 @@ export default function MobileTopBar() {
 
   useEffect(() => {
     if (!meta) return
-    setSymbol(meta.symbol)
+    // 未主动选票前不回填默认品种（移动端要求：进页面不预选股票）
+    if (useStore.getState().symbolChosen) setSymbol(meta.symbol)
     setTimeframe(meta.timeframe)
     setKind(meta.active_kind)
   }, [meta])

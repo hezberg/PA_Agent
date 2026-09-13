@@ -65,6 +65,10 @@ interface Store {
 
   // K 线展开状态（自选清单点击切票时需要跨组件展开）
   chartOpen: boolean
+  /** 本次会话中用户是否主动选过票（未选前移动端图表视图显示引导而非默认 K 线） */
+  symbolChosen: boolean
+  /** 移动端当前主视图 */
+  mView: 'watchlist' | 'chart' | 'analysis'
 
   // actions
   setMeta: (m: Meta) => void
@@ -94,6 +98,8 @@ interface Store {
   openModal: (m: Store['modal']) => void
   showValidation: (v: { title: string; summary: string; body: string }) => void
   toggleChart: () => void
+  chooseSymbol: () => void
+  setMView: (v: 'watchlist' | 'chart' | 'analysis') => void
   setChartOpen: (v: boolean) => void
 }
 
@@ -135,6 +141,8 @@ export const useStore = create<Store>((set) => ({
   chartOpen:
     typeof window !== 'undefined' &&
     (window.location.hash === '#chart' || localStorage.getItem('pa.chart.open') === '1'),
+  symbolChosen: false,
+  mView: 'watchlist',
 
   setMeta: (m) => set({ meta: m }),
   applyUiState: (u) =>
@@ -260,6 +268,8 @@ export const useStore = create<Store>((set) => ({
     localStorage.setItem('pa.chart.open', v ? '1' : '0')
     set({ chartOpen: v })
   },
+  chooseSymbol: () => set({ symbolChosen: true }),
+  setMView: (v) => set({ mView: v }),
   showValidation: (v) => set({ validationBody: v, modal: 'validation' }),
 }))
 

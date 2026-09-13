@@ -1,6 +1,5 @@
 // 移动端骨架：顶栏两行制 + 三主视图（自选/图表/分析）+ 底部 Tab 导航。
 // 当前票全局共享：点自选里的票自动跳「图表」。安全区适配刘海屏与浏览器工具栏。
-import { useEffect, useRef, useState } from 'react'
 import { useStore } from '../store'
 import { useIsMobile } from '../useIsMobile'
 import MobileTopBar from './MobileTopBar'
@@ -26,17 +25,9 @@ type View = 'watchlist' | 'chart' | 'analysis'
 
 export default function MobileShell() {
   const isMobile = useIsMobile()
-  const [view, setView] = useState<View>('watchlist')
-  const metaSymbol = useStore((s) => s.meta?.symbol ?? '')
-  const lastSymbol = useRef('')
-
-  // 品种变化（点了自选/顶栏搜索）→ 自动跳图表；首帧到达不算
-  useEffect(() => {
-    if (metaSymbol && lastSymbol.current && metaSymbol !== lastSymbol.current) {
-      setView('chart')
-    }
-    lastSymbol.current = metaSymbol
-  }, [metaSymbol])
+  const view = useStore((s) => s.mView)
+  const setMView = useStore((s) => s.setMView)
+  const symbolChosen = useStore((s) => s.symbolChosen)
 
   if (!isMobile) return null
 
@@ -59,7 +50,14 @@ export default function MobileShell() {
         {view === 'chart' && (
           <section className="m-chartwrap">
             <ChartDataStatus />
-            <ChartPanel open onCollapse={() => setView('analysis')} />
+            {symbolChosen ? (
+              <ChartPanel open onCollapse={() => setMView('analysis')} />
+            ) : (
+              <div className="m-empty">
+                <div className="m-empty-title">请先选择股票</div>
+                <div>从左侧「自选」中点击，或在上方搜索代码 / 中文名</div>
+              </div>
+            )}
           </section>
         )}
         {view === 'analysis' && <AnalysisView />}
@@ -69,7 +67,7 @@ export default function MobileShell() {
           <button
             key={t.key}
             className={view === t.key ? 'on' : ''}
-            onClick={() => setView(t.key)}
+            onClick={() => setMView(t.key)}
           >
             <span className="m-tab-ico">{t.icon}</span>
             <span>{t.label}</span>

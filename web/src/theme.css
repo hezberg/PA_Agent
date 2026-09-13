@@ -1043,7 +1043,7 @@ table.data-table tr:hover td { background: var(--surface-2); }
   flex-direction: column;
   height: calc(100dvh - 174px); /* 顶栏 + 底部状态栏 + Tab 栏 */
 }
-.m-main .m-chartwrap .m-chart {
+.m-main .m-chartwrap .chart-area {
   display: flex;
   flex: 1;
   min-height: 0;
@@ -1166,3 +1166,16 @@ table.data-table tr:hover td { background: var(--surface-2); }
 .m-analysis .st { gap: 3px; }
 .m-analysis .st-link { width: 12px; margin: 0 4px; }
 .m-analysis .st .cap { font-size: 10.5px; }
+
+/* 移动端图表空态：未选股票时的引导 */
+.m-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--fg-2);
+  font-size: 13px;
+}
+.m-empty-title { font-size: 16px; font-weight: 700; color: var(--fg); }

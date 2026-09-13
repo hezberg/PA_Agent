@@ -47,7 +47,11 @@ export async function switchToSymbol(
     }
   }
 
-  if (opts?.expandChart) useStore.getState().setChartOpen(true)
+  if (opts?.expandChart) {
+    useStore.getState().setChartOpen(true)
+    useStore.getState().setMView('chart') // 移动端：点击自选/候选 → 跳图表视图
+  }
+  useStore.getState().chooseSymbol()
 
   const r = await api.post('/api/fetch')
   if (!r.ok) pushToast({ level: 'error', title: '获取数据失败', message: r.error ?? '' })
