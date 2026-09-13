@@ -575,7 +575,12 @@ def _make_kline_snapshot_fn(state: Any) -> Any:
         )
         if frame is None:
             return ""
-        return PromptAssembler._render_kline_table(frame)
+        from pa_agent.config.paths import PROMPT_DIR
+
+        assembler = PromptAssembler(
+            prompt_dir=PROMPT_DIR, llm_opt_settings=state.settings().llm_opt
+        )
+        return assembler._render_kline_table(frame)
 
     return _snapshot
 

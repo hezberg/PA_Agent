@@ -391,7 +391,7 @@ dependencies = [
     { name = "tzdata" },
 ]
 wheels = [
-    { filename = "easy_tdx-1.32.5-py3-none-any.whl", hash = "sha256:61173bac2125529eba133797bdd797c65c0223c66e12679c81927c5efc5a864d" },
+    { filename = "easy_tdx-1.32.5-py3-none-any.whl", hash = "sha256:11fc626944a247ef0bb4b50b84d23fcfc778aa8c85b046bb00117ab1e5bbd091" },
 ]
 
 [package.metadata]

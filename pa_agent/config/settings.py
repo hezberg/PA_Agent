@@ -141,6 +141,23 @@ class FeishuSettings(BaseModel):
     notify_on_order_only: bool = True
 
 
+class LLMOptSettings(BaseModel):
+    """LLM 分析流水线优化开关（llm-opt 分支；ADR-001/002/003）。
+
+    ① kline_summary：K11–K100 压缩为每 5 根摘要（逐棒分析仅限 K10–K1）
+    ② prompt_reorder：静态指令前置到动态 K 线数据之前（吃满 prompt cache）
+    ③ reasoning_tier：短周期自动降 reasoning 档位（未实现默认关）
+    ④ dual_model：阶段一走轻模型（未实现默认关）
+    """
+    model_config = ConfigDict(extra="ignore")
+
+    kline_summary: bool = True
+    prompt_reorder: bool = True
+    reasoning_tier: bool = False
+    dual_model: bool = False
+    model_light: str = ""
+
+
 class THSSettings(BaseModel):
     """同花顺自选股账号（persisted in ignored settings.json；密码与 API Key 同级敏感）。"""
     model_config = ConfigDict(extra="ignore")
@@ -179,6 +196,7 @@ class Settings(BaseModel):
     feishu: FeishuSettings = Field(default_factory=FeishuSettings)
     pushplus: PushPlusSettings = Field(default_factory=PushPlusSettings)
     tushare: TushareSettings = Field(default_factory=TushareSettings)
+    llm_opt: LLMOptSettings = Field(default_factory=LLMOptSettings)
     ths: THSSettings = Field(default_factory=THSSettings)
 
 
