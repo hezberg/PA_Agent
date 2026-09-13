@@ -105,7 +105,7 @@ def main() -> int:
         pending_dir.mkdir(exist_ok=True)
         from pa_agent.records.pending_writer import PendingWriter as PW
 
-        pending = PW(str(pending_dir))
+        pending = PW(pending_dir)
         exp_reader = None
         from pa_agent.records.experience_reader import ExperienceReader
 
@@ -133,12 +133,12 @@ def main() -> int:
             continue
         dt = time.perf_counter() - t0
 
-        usage = getattr(record, "usage_total", None)
+        usage = getattr(record, "usage_total", None) or {}
         dec = (record.stage2_decision or {}).get("decision", {})
         out = {
             "symbol": payload["symbol"],
             "elapsed_s": round(dt, 1),
-            "usage": usage and usage.model_dump() or None,
+            "usage": dict(usage) if isinstance(usage, dict) else (usage.model_dump() if usage else None),
             "gate_result": (record.stage1_diagnosis or {}).get("gate_result"),
             "cycle_position": (record.stage1_diagnosis or {}).get("cycle_position"),
             "decision": {
