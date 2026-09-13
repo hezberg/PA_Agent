@@ -1,6 +1,0 @@
-
-/* 移动端流程条微调：390px 宽度下压缩连接线与间距 */
-.m-analysis .session-strip { padding: 0 8px; gap: 8px; height: 32px; }
-.m-analysis .st { gap: 3px; }
-.m-analysis .st-link { width: 12px; margin: 0 4px; }
-.m-analysis .st .cap { font-size: 10.5px; }
