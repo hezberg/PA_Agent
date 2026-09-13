@@ -1038,9 +1038,15 @@ table.data-table tr:hover td { background: var(--surface-2); }
 .m-main .wl-items { overflow-y: visible; flex: none; }
 .m-main .wl-head .wl-act[title='收起自选清单'] { display: none; }
 /* 图表视图：定高独占视口余量，页面不滚动，手势全交给画布 */
-.m-chart {
+.m-main .m-chartwrap {
   display: flex;
-  height: calc(100dvh - 178px);
+  flex-direction: column;
+  height: calc(100dvh - 174px); /* 顶栏 + 底部状态栏 + Tab 栏 */
+}
+.m-main .m-chartwrap .m-chart {
+  display: flex;
+  flex: 1;
+  min-height: 0;
   border-bottom: 1px solid var(--line);
 }
 .m-chart .chart-area { flex: 1; border-right: none; }
@@ -1140,3 +1146,17 @@ table.data-table tr:hover td { background: var(--surface-2); }
 .m-analysis .st .dot { width: 14px; height: 14px; font-size: 8px; }
 .m-analysis .st .cap { font-size: 10px; }
 .m-analysis .st-link { width: 8px; margin: 0 2px; flex-shrink: 1; }
+
+/* 图表数据状态条：切票后「获取中→已就绪」全程可见 */
+.m-chartwrap { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.m-fetch-status {
+  font-size: 11px;
+  padding: 4px 10px;
+  background: var(--surface-1);
+  border-bottom: 1px solid var(--line);
+  color: var(--fg-2);
+  flex-shrink: 0;
+}
+.m-fetch-status.fetching, .m-fetch-status.probing, .m-fetch-status.retrying { color: var(--info); }
+.m-fetch-status.done { color: var(--success); }
+.m-fetch-status.error { color: var(--danger); }

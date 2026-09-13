@@ -11,6 +11,17 @@ import ChartPanel from './ChartPanel'
 import WatchlistPanel from './WatchlistPanel'
 import AnalysisView from './AnalysisView'
 
+/** 图表数据状态：切票后「获取中→已就绪」全程可见，回答“什么时候能分析”。 */
+function ChartDataStatus() {
+  const fetchProgress = useStore((s) => s.fetchProgress)
+  const frame = useStore((s) => s.frame)
+  const metaSymbol = useStore((s) => s.meta?.symbol ?? '')
+  const ready = Boolean(frame && frame.symbol === metaSymbol && (frame.bars?.length ?? 0) > 0)
+  const text = fetchProgress?.text ?? (ready ? '数据已就绪，可以开始分析' : '等待数据…')
+  const stage = fetchProgress?.stage ?? (ready ? 'done' : 'fetching')
+  return <div className={`m-fetch-status ${stage}`}>{text}</div>
+}
+
 type View = 'watchlist' | 'chart' | 'analysis'
 
 export default function MobileShell() {
@@ -39,9 +50,15 @@ export default function MobileShell() {
     <div className="app m-app">
       <MobileTopBar />
       <main className="m-main">
-        {view === 'watchlist' && <WatchlistPanel />}
+        {view === 'watchlist' && (
+          <>
+            <ChartDataStatus />
+            <WatchlistPanel />
+          </>
+        )}
         {view === 'chart' && (
-          <section className="m-chart">
+          <section className="m-chartwrap">
+            <ChartDataStatus />
             <ChartPanel open onCollapse={() => setView('analysis')} />
           </section>
         )}

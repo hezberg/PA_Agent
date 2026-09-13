@@ -48,6 +48,14 @@ export default function MobileTopBar() {
   const name = useSymbolName(meta?.symbol)
   const activeName = name ?? ''
 
+  // 数据就绪判断：图表的K线与当前订阅一致才能分析
+  const frame = useStore((s) => s.frame)
+  const dataReady = Boolean(frame && frame.symbol === (meta?.symbol ?? '') && (frame.bars?.length ?? 0) > 0)
+  // 分析按钮禁用原因（数据未就绪时给出明确提示而非可点但失败）
+  const analyzeBlock: string | null = inProgress
+    ? null
+    : submitBlocked ?? (!dataReady ? '正在获取K线数据，就绪后即可分析' : null)
+
   function onSearchInput(value: string) {
     setSymbol(value)
     const q = value.trim()
@@ -118,7 +126,12 @@ export default function MobileTopBar() {
             </span>
           )}
         </span>
-        <button className={inProgress ? 'cancel' : 'primary'} disabled={!!submitBlocked && !inProgress} onClick={onSubmit}>
+        <button
+          className={inProgress ? 'cancel' : 'primary'}
+          disabled={!!analyzeBlock}
+          title={analyzeBlock ?? undefined}
+          onClick={onSubmit}
+        >
           {inProgress ? '取消' : '分析'}
         </button>
       </div>
@@ -182,8 +195,8 @@ export default function MobileTopBar() {
           )}
         </div>
       </div>
-      {!!submitBlocked && !inProgress && /等待|切换/.test(submitBlocked) && (
-        <div className="m-blocked">{submitBlocked}</div>
+      {analyzeBlock && !inProgress && !/API Key/.test(analyzeBlock) && (
+        <div className={`m-blocked${/等待/.test(analyzeBlock) ? ' wl-stale' : ''}`}>{analyzeBlock}</div>
       )}
     </header>
   )
