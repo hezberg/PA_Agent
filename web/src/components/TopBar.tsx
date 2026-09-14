@@ -30,13 +30,14 @@ export default function TopBar() {
   const searchSeq = useRef(0)
   const searchTimer = useRef<number | null>(null)
   const symbolDirtyRef = useRef(false) // 用户正在编辑品种时，meta 轮询不得覆盖输入框
+  const timeframeDirtyRef = useRef(false) // 用户手动选周期后，轮询不得重置回服务器值
   const menuRef = useRef<HTMLDivElement>(null)
 
   // Sync editable fields when meta arrives / changes.
   useEffect(() => {
     if (!meta) return
     if (!symbolDirtyRef.current) setSymbol(meta.symbol)
-    setTimeframe(meta.timeframe)
+    if (!timeframeDirtyRef.current) setTimeframe(meta.timeframe)
     setKind(meta.active_kind)
     setExchange(meta.exchange)
   }, [meta])
@@ -96,7 +97,9 @@ export default function TopBar() {
     setBusy(true)
     try {
       symbolDirtyRef.current = true // 切换期间防 meta 轮询覆盖输入框
+      timeframeDirtyRef.current = true
       await switchToSymbol(sym, { timeframe })
+      timeframeDirtyRef.current = false
       symbolDirtyRef.current = false
     } finally {
       setBusy(false)
@@ -256,7 +259,7 @@ export default function TopBar() {
           </datalist>
         )}
 
-        <select value={timeframe} aria-label="周期" onChange={(e) => setTimeframe(e.target.value)}>
+        <select value={timeframe} aria-label="周期" onChange={(e) => { timeframeDirtyRef.current = true; setTimeframe(e.target.value) }}>
           {(meta?.timeframes?.length ? meta.timeframes : ['1m', '5m', '15m', '1h', '4h', '1d']).map((tf) => (
             <option key={tf} value={tf}>
               {tfZh(tf)}

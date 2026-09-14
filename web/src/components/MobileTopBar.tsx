@@ -26,11 +26,13 @@ export default function MobileTopBar() {
   const searchSeq = useRef(0)
   const menuRef = useRef<HTMLDivElement>(null)
 
+  const timeframeDirtyRef = useRef(false) // 用户手动选周期后，meta 轮询不得重置
+
   useEffect(() => {
     if (!meta) return
     // 未主动选票前不回填默认品种（移动端要求：进页面不预选股票）
     if (useStore.getState().symbolChosen) setSymbol(meta.symbol)
-    setTimeframe(meta.timeframe)
+    if (!timeframeDirtyRef.current) setTimeframe(meta.timeframe)
     setKind(meta.active_kind)
   }, [meta])
 
@@ -82,6 +84,7 @@ export default function MobileTopBar() {
     setBusy(true)
     try {
       await switchToSymbol(symbol, { timeframe })
+      timeframeDirtyRef.current = false
     } finally {
       setBusy(false)
     }
@@ -163,7 +166,7 @@ export default function MobileTopBar() {
             </div>
           )}
         </span>
-        <select aria-label="周期" value={timeframe} onChange={(e) => setTimeframe(e.target.value)}>
+        <select aria-label="周期" value={timeframe} onChange={(e) => { timeframeDirtyRef.current = true; setTimeframe(e.target.value) }}>
           {(meta?.timeframes ?? ['1d']).map((tf) => (
             <option key={tf} value={tf}>
               {tfZh(tf)}
