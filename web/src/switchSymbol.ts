@@ -15,7 +15,7 @@ async function refetchMeta() {
  */
 export async function switchToSymbol(
   subCode: string,
-  opts?: { timeframe?: string; expandChart?: boolean },
+  opts?: { timeframe?: string; expandChart?: boolean; armAutoIncremental?: boolean },
 ): Promise<boolean> {
   const s = useStore.getState()
   const meta = s.meta
@@ -39,7 +39,11 @@ export async function switchToSymbol(
       return false
     }
   } else if (!sameSub) {
-    const r = await api.post('/api/subscribe', { symbol: code, timeframe })
+    const r = await api.post('/api/subscribe', {
+      symbol: code,
+      timeframe,
+      arm_auto_incremental: opts?.armAutoIncremental ?? true,
+    })
     if (!r.ok) {
       pushToast({ level: 'error', title: '切换失败', message: r.error ?? '订阅失败' })
       await refetchMeta()

@@ -25,6 +25,8 @@ class DataSourceSwitch(BaseModel):
 class SubscribeBody(BaseModel):
     symbol: str
     timeframe: str
+    #: False = 仅订阅，不武装「自动增量分析」（自选清单浏览场景）
+    arm_auto_incremental: bool = True
 
 
 @router.get("/meta")
@@ -258,10 +260,15 @@ def _label_for(kind: str) -> str:
 @router.post("/subscribe")
 def subscribe(request: Request, body: SubscribeBody) -> dict[str, Any]:
     """Change symbol/timeframe (mirrors _on_symbol_or_tf_changed)."""
-    return change_symbol_timeframe(get_state(request), body.symbol, body.timeframe)
+    return change_symbol_timeframe(
+        get_state(request), body.symbol, body.timeframe,
+        arm_auto_incremental=body.arm_auto_incremental,
+    )
 
 
-def change_symbol_timeframe(state: Any, new_symbol: str, new_tf: str) -> dict[str, Any]:
+def change_symbol_timeframe(
+    state: Any, new_symbol: str, new_tf: str, *, arm_auto_incremental: bool = True
+) -> dict[str, Any]:
     from pa_agent.data.market_defaults import is_partial_tv_symbol_input
     from pa_agent.server import market_service as market
     from pa_agent.services import data_source_service as dss
@@ -357,7 +364,8 @@ def change_symbol_timeframe(state: Any, new_symbol: str, new_tf: str) -> dict[st
             persist_settings(settings)
 
         # Auto-incremental: check for a prior record, flag the button label.
-        _check_auto_incremental(state, new_symbol.strip(), new_tf)
+        if arm_auto_incremental:
+            _check_auto_incremental(state, new_symbol.strip(), new_tf)
 
         data_source = state.data_source()
         if data_source is not None and getattr(data_source, "_connected", False):

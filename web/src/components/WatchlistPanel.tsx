@@ -212,7 +212,7 @@ export default function WatchlistPanel() {
                   key={active.id + it.market + it.code}
                   className={`wl-item${it.sub_code === metaSymbol ? ' cur' : ''}`}
                   onClick={() =>
-                    switchToSymbol(it.sub_code, { expandChart: true }).then((ok) => {
+                    switchToSymbol(it.sub_code, { expandChart: true, armAutoIncremental: false }).then((ok) => {
                       if (!ok) pushToast({ level: 'error', title: '切换失败', message: it.name || it.code })
                     })
                   }
