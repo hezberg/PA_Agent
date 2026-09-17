@@ -86,6 +86,8 @@ export default function App() {
           s.applyFlowStep(data as never)
           break
         case 'analysis_started': {
+          // 新分析开始：清掉上一只票的结论/实时流，避免分析页误读
+          useStore.getState().clearStaleAnalysis()
           const channel = String(data.channel ?? '')
           if (channel) {
             analysisCloser.current?.()

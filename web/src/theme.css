@@ -1199,3 +1199,7 @@ table.data-table tr:hover td { background: var(--surface-2); }
 /* K 线打开时：自选面板收窄，分组标签改 2 列 */
 .workbench.chart-open .watchlist { flex: 0 0 320px; }
 .workbench.chart-open .wl-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+/* 移动端流程条：步骤与上下文用量强制分两行，杜绝遮挡 */
+.m-analysis .session-strip { display: block; height: auto; padding: 4px 8px; }
+.m-analysis .token-meter { margin-top: 4px; }

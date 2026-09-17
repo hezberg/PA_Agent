@@ -78,6 +78,7 @@ interface Store {
   applyFrame: (f: FramePayload) => void
   setPrice: (p: { price: string; color: string } | null) => void
   resetFlow: () => void
+  clearStaleAnalysis: () => void
   applyFlowStep: (s: { index?: number; status?: FlowStep['status']; caption?: string; reset?: boolean }) => void
   startStream: (title: string) => void
   appendReasoning: (stage: string, chunk: string) => void
@@ -144,7 +145,15 @@ export const useStore = create<Store>((set) => ({
   symbolChosen: false,
   mView: 'watchlist',
 
-  setMeta: (m) => set({ meta: m }),
+  // 品种变化：上一只票的分析结论/实时流立即清理，避免误读为新票的结果
+  setMeta: (m) =>
+    set((s) => {
+      const switched = Boolean(s.meta && s.meta.symbol && m.symbol && s.meta.symbol !== m.symbol)
+      return {
+        meta: m,
+        ...(switched ? { decision: null, panes: [], streaming: false } : {}),
+      }
+    }),
   applyUiState: (u) =>
     set((s) => ({
       ui: { ...(s.ui ?? ({} as UiState)), ...u },
@@ -269,6 +278,7 @@ export const useStore = create<Store>((set) => ({
     set({ chartOpen: v })
   },
   chooseSymbol: () => set({ symbolChosen: true }),
+  clearStaleAnalysis: () => set({ decision: null, panes: [], streaming: false }),
   setMView: (v) => set({ mView: v }),
   showValidation: (v) => set({ validationBody: v, modal: 'validation' }),
 }))
