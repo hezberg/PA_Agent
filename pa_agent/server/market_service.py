@@ -88,7 +88,8 @@ def start_refresh_loop(state: Any) -> bool:
 
     settings = state.settings()
     interval_ms = dss.refresh_interval_ms(settings, state.active_data_source_kind)
-    n_bars = dss.analysis_bar_count(settings)
+    # 拉满图表与分析中较大的根数；分析侧仍只消费 analysis_bar_count
+    n_bars = max(dss.analysis_bar_count(settings), dss.chart_bar_count(settings))
 
     state.refresh_cancel_token = CancelToken()
     loop = RefreshLoop(
@@ -178,7 +179,7 @@ def on_frame_ready(state: Any, bars: Any) -> None:
         settings = state.settings()
         frame = build_frame_from_bars(
             bars,
-            bar_count=None,
+            bar_count=dss.chart_bar_count(settings),
             symbol=current_symbol(state),
             timeframe=current_timeframe(state),
             now_ms=now_ms(state),

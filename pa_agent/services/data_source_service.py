@@ -12,6 +12,14 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
+def chart_bar_count(settings: Any) -> int:
+    """K 线图显示根数（分析仍用 analysis_bar_count，互不影响）。"""
+    try:
+        return int(getattr(settings.general, "chart_bar_count", 300))
+    except Exception:  # noqa: BLE001
+        return 300
+
+
 def analysis_bar_count(settings: Any) -> int:
     """Closed-bar count for AI analysis and chart fetch (from settings)."""
     if settings is None:

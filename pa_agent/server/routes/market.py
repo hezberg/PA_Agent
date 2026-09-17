@@ -505,7 +505,7 @@ def get_klines(request: Request, bars: int = 0) -> dict[str, Any]:
     data_source = state.data_source()
     if data_source is None or not getattr(data_source, "_connected", False):
         return {"ok": False, "error": "数据源未连接"}
-    bar_count = bars or dss.analysis_bar_count(state.settings())
+    bar_count = bars or dss.chart_bar_count(state.settings())
     try:
         raw = data_source.latest_snapshot(bar_count + INDICATOR_WARMUP_BARS + 5)
     except Exception as exc:  # noqa: BLE001
@@ -518,7 +518,7 @@ def get_klines(request: Request, bars: int = 0) -> dict[str, Any]:
     state.last_refresh_ts = _time.monotonic()
     frame = dss.build_frame_from_bars(
         raw,
-        bar_count=None,
+        bar_count=bar_count,
         symbol=market.current_symbol(state),
         timeframe=market.current_timeframe(state),
         now_ms=market.now_ms(state),
