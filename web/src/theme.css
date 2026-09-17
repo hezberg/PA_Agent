@@ -389,6 +389,12 @@ input[type='checkbox'] { accent-color: var(--accent); }
 /* ── 工作区 ─────────────────────────────────────────────────────────────── */
 
 .workbench { flex: 1; display: flex; min-height: 0; }
+/* K 线关闭时：自选与分析各占一半 */
+.workbench.chart-closed .watchlist { flex: 0 0 50%; max-width: 50%; }
+.workbench.chart-closed .sidebar { flex: 1 1 50%; min-width: 0; }
+/* K 线打开时：自选收窄为固定宽，图表与分析分剩余空间 */
+.workbench.chart-open .watchlist { flex: 0 0 320px; }
+.workbench.chart-open .sidebar { flex: 1 1 auto; min-width: 0; }
 
 /* K 线展开轨（收起态可见，一键展开） */
 .rail {
@@ -441,9 +447,9 @@ input[type='checkbox'] { accent-color: var(--accent); }
 .wl-act:hover:not(:disabled) { background: var(--surface-3); color: var(--fg); }
 .wl-guide { padding: 14px 12px; display: flex; flex-direction: column; gap: 10px; color: var(--fg-2); font-size: 12px; }
 .wl-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 3px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
   padding: 6px 8px;
   border-bottom: 1px solid var(--line);
 }
@@ -451,14 +457,18 @@ input[type='checkbox'] { accent-color: var(--accent); }
   border: none;
   background: transparent;
   color: var(--fg-2);
-  padding: 2px 8px;
+  padding: 2px 4px;
   border-radius: 9px;
   font-size: 11px;
   cursor: pointer;
-  max-width: 88px;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-align: center;
+  display: inline-flex;
+  justify-content: center;
+  gap: 2px;
 }
 .wl-tab:hover { color: var(--fg); background: var(--surface-3); }
 .wl-tab.on { background: var(--surface-3); color: var(--accent); font-weight: 600; }
@@ -1101,6 +1111,10 @@ table.data-table tr:hover td { background: var(--surface-2); }
 @media (max-width: 768px) {
   body { overflow: visible; } /* 放开根滚动器：Chrome 原生下拉刷新可用（桌面仍 hidden） */
   .watchlist { width: 100%; border-right: none; }
+  .workbench.chart-closed .watchlist,
+  .workbench.chart-open .watchlist { flex: none; width: 100%; max-width: none; }
+  .m-main .wl-tabs { display: flex; flex-wrap: wrap; }
+  .m-main .wl-tab { max-width: none; }
   .watchlist-rail { display: none; }
   .wl-head .wl-act[title='收起自选清单'] { display: none; }
   /* 弹窗 → 底部滑入面板 */
@@ -1181,3 +1195,7 @@ table.data-table tr:hover td { background: var(--surface-2); }
 .m-empty-title { font-size: 16px; font-weight: 700; color: var(--fg); }
 .wl-tab .wl-tab-chg { font-weight: 700; }
 .wl-tab .wl-tab-chg { font-weight: 700; }
+
+/* K 线打开时：自选面板收窄，分组标签改 2 列 */
+.workbench.chart-open .watchlist { flex: 0 0 320px; }
+.workbench.chart-open .wl-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }

@@ -183,7 +183,7 @@ export default function App() {
     <div className="app">
       <TopBar />
       <FlowBar />
-      <div className="workbench">
+      <div className={`workbench ${chartOpen ? "chart-open" : "chart-closed"}`}>
         <WatchlistPanel />
         {!chartOpen && (
           <button className="rail" title="展开 K 线图" onClick={toggleChart}>
