@@ -1179,3 +1179,5 @@ table.data-table tr:hover td { background: var(--surface-2); }
   font-size: 13px;
 }
 .m-empty-title { font-size: 16px; font-weight: 700; color: var(--fg); }
+.wl-tab .wl-tab-chg { font-weight: 700; }
+.wl-tab .wl-tab-chg { font-weight: 700; }

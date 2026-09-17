@@ -99,6 +99,17 @@ export default function WatchlistPanel() {
     return { id: ALL_ID, name: '全部', items }
   }, [groups])
 
+  // 分组成员当日涨跌幅的算术平均（仅统计有行情快照的成员）
+  function groupMeanChg(g: ThsGroup): number | undefined {
+    const vals: number[] = []
+    for (const it of g.items) {
+      const q = quotes[it.sub_code]
+      if (q && typeof q.change_pct === 'number') vals.push(q.change_pct)
+    }
+    if (!vals.length) return undefined
+    return vals.reduce((a, b) => a + b, 0) / vals.length
+  }
+
   const active = groups.find((g) => g.id === activeId) ?? (activeId === ALL_ID ? allGroup : groups[0])
   if (!active && !error && thsEnabled && groups.length > 0) {
     // groups 尚未就绪时的兜底
@@ -191,16 +202,27 @@ export default function WatchlistPanel() {
       ) : (
         <>
           <div className="wl-tabs">
-            {[allGroup, ...groups].map((g) => (
-              <button
-                key={g.id}
-                className={`wl-tab${g.id === active?.id ? ' on' : ''}`}
-                onClick={() => setActiveId(g.id)}
-                title={`${g.name}（${g.items.length} 只）`}
-              >
-                {g.name}
-              </button>
-            ))}
+            {[allGroup, ...groups].map((g) => {
+              const isSpecial = g.id === ALL_ID || g.id === '__selfstock__'
+              const mean = isSpecial ? undefined : groupMeanChg(g)
+              return (
+                <button
+                  key={g.id}
+                  className={`wl-tab${g.id === active?.id ? ' on' : ''}`}
+                  onClick={() => setActiveId(g.id)}
+                  title={mean !== undefined
+                    ? `${g.name}（${g.items.length} 只）· 组内平均 ${mean.toFixed(2)}%`
+                    : `${g.name}（${g.items.length} 只）`}
+                >
+                  {g.name}
+                  {mean !== undefined && (
+                    <span className="wl-tab-chg" style={{ color: chgColor(mean) }}>
+                      {' '}{mean > 0 ? '+' : ''}{mean.toFixed(1)}%
+                    </span>
+                  )}
+                </button>
+              )
+            })}
           </div>
           {stale && <div className="wl-stale">拉取失败，显示上次缓存</div>}
           <div className="wl-items">
