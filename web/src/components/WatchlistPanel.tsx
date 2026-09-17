@@ -3,6 +3,7 @@
 // 点击=切票+自动展开K线；行情为交易时段内按设置间隔刷新的快照（非轮询式逐票请求）。
 // 移动端：顶部下拉（列表置顶时）→ 释放整页刷新，替代被应用式布局挡住的 Chrome 原生下拉刷新。
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useIsMobile } from '../useIsMobile'
 import { api } from '../api/client'
 import { useStore } from '../store'
 import { switchToSymbol } from '../switchSymbol'
@@ -21,6 +22,7 @@ function chgColor(v: number | undefined): string | undefined {
 }
 
 export default function WatchlistPanel() {
+  const isMobile = useIsMobile()
   const thsEnabled = useStore((s) => s.meta?.ths_enabled ?? false)
   const openModal = useStore((s) => s.openModal)
   const pushToast = useStore((s) => s.pushToast)
@@ -234,7 +236,7 @@ export default function WatchlistPanel() {
                   key={active.id + it.market + it.code}
                   className={`wl-item${it.sub_code === metaSymbol ? ' cur' : ''}`}
                   onClick={() =>
-                    switchToSymbol(it.sub_code, { expandChart: true, armAutoIncremental: false }).then((ok) => {
+                    switchToSymbol(it.sub_code, { expandChart: isMobile, armAutoIncremental: false }).then((ok) => {
                       if (!ok) pushToast({ level: 'error', title: '切换失败', message: it.name || it.code })
                     })
                   }

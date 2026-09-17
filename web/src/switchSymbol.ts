@@ -26,6 +26,13 @@ export async function switchToSymbol(
 
   const sameSub = meta?.active_kind === 'easytdx' && meta?.symbol === code && meta?.timeframe === timeframe
 
+  // 视图与选中状态先行：点自选/候选 = 用户明确要看这只票（跳转不依赖后续网络结果）
+  if (opts?.expandChart) {
+    useStore.getState().setChartOpen(true)
+    useStore.getState().setMView('chart') // 移动端：点击自选/候选 → 跳图表视图
+  }
+  useStore.getState().chooseSymbol()
+
   if (!sameSub && meta?.active_kind !== 'easytdx') {
     // A 股/港股代码只有通达信源可订阅：先切换数据来源；上次切换可能仍在进行，稍候重试。
     let r = await api.post('/api/data-source', { kind: 'easytdx', symbol: code, timeframe })
@@ -59,11 +66,6 @@ export async function switchToSymbol(
     return true
   }
 
-  if (opts?.expandChart) {
-    useStore.getState().setChartOpen(true)
-    useStore.getState().setMView('chart') // 移动端：点击自选/候选 → 跳图表视图
-  }
-  useStore.getState().chooseSymbol()
   await refetchMeta()
   return true
 }
