@@ -171,6 +171,7 @@ def on_frame_ready(state: Any, bars: Any) -> None:
 
     price = flow.live_price_info(bars)
     if price:
+        price = {**price, "symbol": current_symbol(state)}
         state.hub.publish("frames", Event(type="price", data=price))
 
     if not state.chart_refresh_paused:

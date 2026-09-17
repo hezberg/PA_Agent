@@ -162,8 +162,19 @@ export const useStore = create<Store>((set) => ({
     })),
   setStatus: (text) => set({ statusText: text || '' }),
   applyFetchProgress: (p) => set({ fetchProgress: p }),
-  applyFrame: (f) => set({ frame: f, lastRefreshTs: Date.now(), stale: false }),
-  setPrice: (p) => set({ price: p }),
+  applyFrame: (f) =>
+    set((s) => {
+      // 切票瞬间旧票的迟到帧直接丢弃，保证 代码/名称/图表 三者一致
+      if (s.meta && f.symbol && s.meta.symbol !== f.symbol) return {}
+      return { frame: f, lastRefreshTs: Date.now(), stale: false }
+    }),
+  setPrice: (p) =>
+    set((s) => {
+      // 现价推送不带历史——与当前订阅不一致（切票瞬间的旧票价格）直接丢弃
+      if (s.meta && p && (p as any).symbol && (p as any).symbol !== s.meta.symbol) return {}
+      const { symbol: _drop, ...rest } = (p ?? {}) as any
+      return { price: rest && rest.price !== undefined ? rest : p }
+    }),
 
   resetFlow: () => {
     const steps = makeSteps()
