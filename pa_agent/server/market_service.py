@@ -116,7 +116,7 @@ def start_refresh_loop(state: Any) -> bool:
     return True
 
 
-def stop_refresh_loop(state: Any, join_ms: int = 5000) -> None:
+def stop_refresh_loop(state: Any, join_ms: int = 250) -> None:
     loop = state.refresh_loop
     state.fetch_pending = False
     if loop is None:

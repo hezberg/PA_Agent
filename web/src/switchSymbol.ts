@@ -38,6 +38,7 @@ export async function switchToSymbol(
       await refetchMeta()
       return false
     }
+    // data-source 路由内部已重启刷新循环，无需再调 /api/fetch
   } else if (!sameSub) {
     const r = await api.post('/api/subscribe', {
       symbol: code,
@@ -49,6 +50,13 @@ export async function switchToSymbol(
       await refetchMeta()
       return false
     }
+    // subscribe 路由内部已重启刷新循环
+  } else {
+    // 同品种同周期：显式强制重新拉取一轮
+    const r = await api.post('/api/fetch')
+    if (!r.ok) pushToast({ level: 'error', title: '刷新失败', message: r.error ?? '' })
+    await refetchMeta()
+    return true
   }
 
   if (opts?.expandChart) {
@@ -56,9 +64,6 @@ export async function switchToSymbol(
     useStore.getState().setMView('chart') // 移动端：点击自选/候选 → 跳图表视图
   }
   useStore.getState().chooseSymbol()
-
-  const r = await api.post('/api/fetch')
-  if (!r.ok) pushToast({ level: 'error', title: '获取数据失败', message: r.error ?? '' })
   await refetchMeta()
   return true
 }
