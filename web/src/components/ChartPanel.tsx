@@ -13,6 +13,11 @@ import { tfZh, useSymbolName } from '../symbolName'
 import { ChevronLeftIcon } from '../icons'
 import type { StructureLevel } from '../api/types'
 
+// lightweight-charts 时间轴固定按 UTC 渲染；加本地时区偏移使轴显示本地墙上时间
+// （否则 UTC+8 用户看到的 K 线时间会早 8 小时，显示成 A 股未开盘的清晨时段）
+const TZ_OFFSET_SEC = new Date().getTimezoneOffset() * 60
+const toChartTime = (epochMs: number): Time => (epochMs / 1000 - TZ_OFFSET_SEC) as Time
+
 // Rosé Pine 图表配色（红涨绿跌，低对比）
 const CHART_BG = '#191724'
 const CHART_GRID = '#26233a'
@@ -84,7 +89,7 @@ export default function ChartPanel({ open, onCollapse }: { open: boolean; onColl
     if (!candles || !ema || !frame || frame.bars.length === 0) return
 
     const candleData: CandlestickData<Time>[] = frame.bars.map((b) => ({
-      time: (b.ts_open / 1000) as Time,
+      time: toChartTime(b.ts_open),
       open: b.open,
       high: b.high,
       low: b.low,
@@ -96,7 +101,7 @@ export default function ChartPanel({ open, onCollapse }: { open: boolean; onColl
     const emaData: LineData<Time>[] = []
     frame.ema20.forEach((v, i) => {
       if (v !== null && v !== undefined && frame.bars[i]) {
-        emaData.push({ time: (frame.bars[i].ts_open / 1000) as Time, value: v })
+        emaData.push({ time: toChartTime(frame.bars[i].ts_open), value: v })
       }
     })
     ema.setData(emaData)
