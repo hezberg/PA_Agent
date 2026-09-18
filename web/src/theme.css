@@ -392,9 +392,10 @@ input[type='checkbox'] { accent-color: var(--accent); }
 /* K 线关闭时：自选与分析各占一半 */
 .workbench.chart-closed .watchlist { flex: 0 0 50%; max-width: 50%; }
 .workbench.chart-closed .sidebar { flex: 1 1 50%; min-width: 0; }
-/* K 线打开时：自选收窄为固定宽，图表与分析分剩余空间 */
+/* K 线打开时：自选收窄为固定宽；图表:侧栏 = 3:2 按比例分配（basis 0，
+   不能按内容宽度，否则长决策票会把 K 线挤到不可见） */
 .workbench.chart-open .watchlist { flex: 0 0 320px; }
-.workbench.chart-open .sidebar { flex: 1 1 auto; min-width: 0; }
+.workbench.chart-open .sidebar { flex: 2 1 0; min-width: 340px; }
 
 /* K 线展开轨（收起态可见，一键展开） */
 .rail {
