@@ -37,6 +37,7 @@ export default function App() {
   const demoCloser = useRef<null | (() => void)>(null)
   const chartOpen = useStore((s) => s.chartOpen)
   const toggleChart = useStore((s) => s.toggleChart)
+  const symbolChosen = useStore((s) => s.symbolChosen)
   const isMobile = useIsMobile()
 
   useEffect(() => {
@@ -193,7 +194,14 @@ export default function App() {
             <span className="rail-txt">K 线</span>
           </button>
         )}
-        <ChartPanel open={chartOpen} onCollapse={toggleChart} />
+        {chartOpen && !symbolChosen ? (
+          <div className="m-empty">
+            <div className="m-empty-title">请先选择股票</div>
+            <div>从左侧「自选」中点击，或在上方搜索代码 / 中文名</div>
+          </div>
+        ) : (
+          <ChartPanel open={chartOpen} onCollapse={toggleChart} />
+        )}
         <Sidebar />
       </div>
       <StatusBar />

@@ -36,7 +36,8 @@ export default function TopBar() {
   // Sync editable fields when meta arrives / changes.
   useEffect(() => {
     if (!meta) return
-    if (!symbolDirtyRef.current) setSymbol(meta.symbol)
+    // 进页面不预选股票：只有用户主动选过才回填品种
+    if (useStore.getState().symbolChosen && !symbolDirtyRef.current) setSymbol(meta.symbol)
     if (!timeframeDirtyRef.current) setTimeframe(meta.timeframe)
     setKind(meta.active_kind)
     setExchange(meta.exchange)
@@ -167,6 +168,7 @@ export default function TopBar() {
     }
   }
 
+  const symbolChosen = useStore((s) => s.symbolChosen)
   const symbolAlert = meta?.symbol_alert ?? null
   const isTv = kind === 'tradingview'
   const isFutures = kind === 'eastmoney_futures'
@@ -267,12 +269,12 @@ export default function TopBar() {
           ))}
         </select>
 
-        {activeName && <span className="sym-name">{activeName}</span>}
+        {symbolChosen && activeName && <span className="sym-name">{activeName}</span>}
 
         {symbolAlert && <span className="chip warn" title={symbolAlert}>品种告警</span>}
       </div>
 
-      {price && (
+      {symbolChosen && price && (
         <span className="price-big" style={{ color: price.color }}>
           {price.price}
         </span>

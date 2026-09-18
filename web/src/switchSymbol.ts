@@ -6,7 +6,8 @@ import type { Meta } from './api/types'
 
 async function refetchMeta() {
   const m = await api.get('/api/meta')
-  if (m.ok) useStore.getState().setMeta(m as Meta)
+  // 注意：/api/meta 响应没有 ok 字段，不能用 m.ok 判断（曾经因此导致切票后不同步）
+  if (m && (m as Meta).symbol) useStore.getState().setMeta(m as Meta)
 }
 
 /**

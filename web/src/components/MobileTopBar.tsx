@@ -26,12 +26,13 @@ export default function MobileTopBar() {
   const searchSeq = useRef(0)
   const menuRef = useRef<HTMLDivElement>(null)
 
+  const symbolChosen = useStore((s) => s.symbolChosen)
   const timeframeDirtyRef = useRef(false) // 用户手动选周期后，meta 轮询不得重置
 
   useEffect(() => {
     if (!meta) return
     // 未主动选票前不回填默认品种（移动端要求：进页面不预选股票）
-    if (useStore.getState().symbolChosen) setSymbol(meta.symbol)
+    if (symbolChosen) setSymbol(meta.symbol)
     if (!timeframeDirtyRef.current) setTimeframe(meta.timeframe)
     setKind(meta.active_kind)
   }, [meta])
@@ -109,7 +110,7 @@ export default function MobileTopBar() {
       return
     }
     const m = await api.get('/api/meta')
-    if (m.ok) useStore.getState().setMeta(m)
+    if (m && m.symbol) useStore.getState().setMeta(m)
   }
 
   async function onToggleKeep(enabled: boolean) {
@@ -124,7 +125,7 @@ export default function MobileTopBar() {
       <div className="m-row1">
         <span className="m-sym">
           <span className="m-sym-name">{activeName || meta?.symbol}</span>
-          {price && (
+          {symbolChosen && price && (
             <span className="m-price" style={{ color: price.color }}>
               {price.price}
             </span>
