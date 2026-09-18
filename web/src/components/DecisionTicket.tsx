@@ -1,6 +1,7 @@
 // 决策票：AI 决策结果的一览卡（方向 / 信心 / 价位 / 盈亏比条），常驻侧栏顶部。
 import { useState } from 'react'
 import { useStore } from '../store'
+import { useSymbolName } from '../symbolName'
 import { ChevronDownIcon } from '../icons'
 
 const SUMMARY_KEYS = ['当前趋势', '当前市场周期', '下一个市场周期', '支撑区', '阻力区'] as const
@@ -24,6 +25,8 @@ function directionClass(text: string): 'up' | 'down' | '' {
 
 export default function DecisionTicket() {
   const decision = useStore((s) => s.decision)
+  const metaSymbol = useStore((s) => s.meta?.symbol ?? '')
+  const symbolName = useSymbolName(metaSymbol)
   const [folded, setFolded] = useState(false)
   if (!decision || !decision.decision_inner || Object.keys(decision.decision_inner).length === 0) {
     return null
@@ -53,6 +56,12 @@ export default function DecisionTicket() {
     <>
       <div className={`ticket${folded ? ' folded' : ''}`}>
         <div className="ticket-head">
+          {metaSymbol && (
+            <span className="ticket-symbol">
+              {symbolName ? `${symbolName} ` : ''}
+              <span className="mono">{metaSymbol}</span>
+            </span>
+          )}
           <span className={`ticket-dir ${isNoOrder ? '' : dirCls}`} style={isNoOrder ? { color: 'var(--warning)' } : undefined}>
             {isNoOrder ? '观望' : direction !== '—' ? direction : orderType}
           </span>

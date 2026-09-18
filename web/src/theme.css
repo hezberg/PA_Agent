@@ -1203,3 +1203,7 @@ table.data-table tr:hover td { background: var(--surface-2); }
 /* 移动端流程条：步骤与上下文用量强制分两行，杜绝遮挡 */
 .m-analysis .session-strip { display: block; height: auto; padding: 4px 8px; }
 .m-analysis .token-meter { margin-top: 4px; }
+
+/* 决策票：标的名称与代码（置于方向之前） */
+.ticket-symbol { font-size: 12px; color: var(--fg-2); white-space: nowrap; }
+.ticket-symbol .mono { color: var(--fg-3); font-size: 11px; }
