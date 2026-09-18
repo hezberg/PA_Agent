@@ -447,32 +447,63 @@ input[type='checkbox'] { accent-color: var(--accent); }
 }
 .wl-act:hover:not(:disabled) { background: var(--surface-3); color: var(--fg); }
 .wl-guide { padding: 14px 12px; display: flex; flex-direction: column; gap: 10px; color: var(--fg-2); font-size: 12px; }
-.wl-tabs {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+/* 两列布局：左分组卡片 / 右成分股 */
+.wl-body { flex: 1; display: flex; min-height: 0; }
+.wl-groups {
+  width: 200px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  border-right: 1px solid var(--line);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
   gap: 4px;
-  padding: 6px 8px;
-  border-bottom: 1px solid var(--line);
 }
-.wl-tab {
+.wl-stocks { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
+.wl-col-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 2px 4px 6px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 4px;
+}
+.wl-stocks .wl-col-head { padding: 6px 10px 6px; }
+.wl-col-title { font-size: 11px; color: var(--fg-2); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wl-col-count { color: var(--fg-3); font-weight: 400; }
+.wl-sort {
   border: none;
   background: transparent;
-  color: var(--fg-2);
-  padding: 2px 4px;
-  border-radius: 9px;
+  color: var(--accent);
   font-size: 11px;
+  padding: 1px 4px;
+  border-radius: 6px;
   cursor: pointer;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
-  text-align: center;
-  display: inline-flex;
-  justify-content: center;
-  gap: 2px;
 }
-.wl-tab:hover { color: var(--fg); background: var(--surface-3); }
-.wl-tab.on { background: var(--surface-3); color: var(--accent); font-weight: 600; }
+.wl-sort:hover { background: var(--surface-3); }
+.wl-group-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  border: 1px solid transparent;
+  background: var(--surface-2);
+  border-radius: 8px;
+  padding: 9px 10px;
+  cursor: pointer;
+  min-height: 38px;
+}
+.wl-group-card:hover { background: var(--surface-3); }
+.wl-group-card.on { background: var(--surface-3); border-color: var(--accent); }
+.wl-group-name { font-size: 12.5px; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wl-group-card.on .wl-group-name { color: var(--accent); font-weight: 600; }
+.wl-group-meta { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.wl-group-meta b { font-size: 11.5px; font-family: var(--font-mono); font-weight: 700; }
+.wl-group-meta i { font-style: normal; font-size: 10px; color: var(--fg-3); }
 .wl-stale { padding: 4px 10px; font-size: 10.5px; color: var(--warning); }
 .wl-items { flex: 1; overflow-y: auto; min-height: 0; padding: 4px 0; }
 .wl-item {
@@ -1114,8 +1145,9 @@ table.data-table tr:hover td { background: var(--surface-2); }
   .watchlist { width: 100%; border-right: none; }
   .workbench.chart-closed .watchlist,
   .workbench.chart-open .watchlist { flex: none; width: 100%; max-width: none; }
-  .m-main .wl-tabs { display: flex; flex-wrap: wrap; }
-  .m-main .wl-tab { max-width: none; }
+  .m-main .wl-groups { width: 128px; padding: 4px; }
+  .m-main .wl-group-card { padding: 7px 8px; min-height: 34px; }
+  .m-main .wl-group-name { font-size: 12px; }
   .watchlist-rail { display: none; }
   .wl-head .wl-act[title='收起自选清单'] { display: none; }
   /* 弹窗 → 底部滑入面板 */
@@ -1194,12 +1226,9 @@ table.data-table tr:hover td { background: var(--surface-2); }
   font-size: 13px;
 }
 .m-empty-title { font-size: 16px; font-weight: 700; color: var(--fg); }
-.wl-tab .wl-tab-chg { font-weight: 700; }
-.wl-tab .wl-tab-chg { font-weight: 700; }
 
 /* K 线打开时：自选面板收窄，分组标签改 2 列 */
 .workbench.chart-open .watchlist { flex: 0 0 320px; }
-.workbench.chart-open .wl-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
 /* 移动端流程条：步骤与上下文用量强制分两行，杜绝遮挡 */
 .m-analysis .session-strip { display: block; height: auto; padding: 4px 8px; }

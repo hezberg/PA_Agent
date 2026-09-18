@@ -11,10 +11,10 @@ if [ ! -x "$PYTHON" ]; then
   exit 1
 fi
 
-TS_IP="127.0.0.1"  # 改造: 绑定回环, tailnet 入口由 tailscale serve 反代接管
+TS_IP=""
 i=0
 while [ "$i" -lt 24 ]; do
-#   TS_IP="$(/usr/bin/tailscale ip -4 2>/dev/null | head -n1 || true)"
+  TS_IP="$(/usr/bin/tailscale ip -4 2>/dev/null | head -n1 || true)"
   [ -n "$TS_IP" ] && break
   i=$((i + 1))
   echo "waiting for tailnet IP... ($i)" >&2

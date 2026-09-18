@@ -36,6 +36,7 @@ export default function WatchlistPanel() {
   const [stale, setStale] = useState(false)
   const [quotes, setQuotes] = useState<Record<string, Quote>>({})
   const [sortMode, setSortMode] = useState<'none' | 'desc' | 'asc'>('desc')
+  const [groupSort, setGroupSort] = useState<'none' | 'desc' | 'asc'>('desc')
 
   const load = useCallback(
     async (force = false) => {
@@ -136,6 +137,29 @@ export default function WatchlistPanel() {
   }
   const sortLabel = sortMode === 'desc' ? '涨跌↓' : sortMode === 'asc' ? '涨跌↑' : '排序'
 
+  // 分组排序：全部/我的自选固定在顶部，其余按组内平均涨跌排序
+  const sortedGroups = useMemo(() => {
+    const pinned = [allGroup, ...groups.filter((g) => g.id === '__selfstock__')]
+    const rest = groups.filter((g) => g.id !== '__selfstock__')
+    if (groupSort !== 'none') {
+      rest.sort((a, b) => {
+        const ma = groupMeanChg(a)
+        const mb = groupMeanChg(b)
+        if (ma === undefined && mb === undefined) return 0
+        if (ma === undefined) return 1 // 无行情分组恒垫底
+        if (mb === undefined) return -1
+        return groupSort === 'desc' ? mb - ma : ma - mb
+      })
+    }
+    return [...pinned, ...rest]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groups, allGroup, groupSort, quotes])
+
+  function toggleGroupSort() {
+    setGroupSort((m) => (m === 'none' ? 'desc' : m === 'desc' ? 'asc' : 'none'))
+  }
+  const groupSortLabel = groupSort === 'desc' ? '涨跌↓' : groupSort === 'asc' ? '涨跌↑' : '默认'
+
   if (!open) {
     return (
       <button
@@ -202,32 +226,63 @@ export default function WatchlistPanel() {
           <button onClick={() => load(true)}>重试</button>
         </div>
       ) : (
-        <>
-          <div className="wl-tabs">
-            {[allGroup, ...groups].map((g) => {
+        <div className="wl-body">
+          {/* 左列：分组卡片（名称 + 组内平均涨跌 + 数量），可按平均涨幅排序 */}
+          <div className="wl-groups">
+            <div className="wl-col-head">
+              <span className="wl-col-title">分组</span>
+              <button
+                className="wl-sort"
+                disabled={groups.length === 0}
+                onClick={toggleGroupSort}
+                title="分组按组内平均涨跌排序"
+              >
+                {groupSortLabel}
+              </button>
+            </div>
+            {sortedGroups.map((g) => {
               const isSpecial = g.id === ALL_ID || g.id === '__selfstock__'
               const mean = isSpecial ? undefined : groupMeanChg(g)
               return (
                 <button
                   key={g.id}
-                  className={`wl-tab${g.id === active?.id ? ' on' : ''}`}
+                  className={`wl-group-card${g.id === active?.id ? ' on' : ''}`}
                   onClick={() => setActiveId(g.id)}
                   title={mean !== undefined
                     ? `${g.name}（${g.items.length} 只）· 组内平均 ${mean.toFixed(2)}%`
                     : `${g.name}（${g.items.length} 只）`}
                 >
-                  {g.name}
-                  {mean !== undefined && (
-                    <span className="wl-tab-chg" style={{ color: chgColor(mean) }}>
-                      {' '}{mean > 0 ? '+' : ''}{mean.toFixed(1)}%
-                    </span>
-                  )}
+                  <span className="wl-group-name">{g.name}</span>
+                  <span className="wl-group-meta">
+                    {mean !== undefined && (
+                      <b style={{ color: chgColor(mean) }}>
+                        {mean > 0 ? '+' : ''}{mean.toFixed(1)}%
+                      </b>
+                    )}
+                    <i>{g.items.length}</i>
+                  </span>
                 </button>
               )
             })}
           </div>
-          {stale && <div className="wl-stale">拉取失败，显示上次缓存</div>}
-          <div className="wl-items">
+          {/* 右列：选中分组的成分股（可按当日涨跌排序） */}
+          <div className="wl-stocks">
+            <div className="wl-col-head">
+              <span className="wl-col-title">
+                {active?.name ?? ''}
+                <span className="wl-col-count">（{active?.items.length ?? 0}）</span>
+              </span>
+              <button
+                className="wl-sort"
+                disabled={groups.length === 0}
+                onClick={toggleSort}
+                title="成分股按当日涨跌幅排序"
+              >
+                {sortLabel}
+              </button>
+            </div>
+            {stale && <div className="wl-stale">拉取失败，显示上次缓存</div>}
+            <div className="wl-items">
             {sortedItems.map((it) => {
               const q = quotes[it.sub_code]
               const name = it.name || q?.name || it.sub_code
@@ -262,9 +317,10 @@ export default function WatchlistPanel() {
                 </button>
               )
             })}
-            {active && active.items.length === 0 && <div className="wl-empty">该分组暂无股票</div>}
+              {active && active.items.length === 0 && <div className="wl-empty">该分组暂无股票</div>}
+            </div>
           </div>
-        </>
+        </div>
       )}
     </section>
   )
